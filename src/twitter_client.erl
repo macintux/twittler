@@ -106,7 +106,7 @@
 -include("twitter_client.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
--define(BASE_URL(X), "http://www.twitter.com/" ++ X).
+-define(BASE_URL(X), "http://api.twitter.com/1.1" ++ X).
 
 status_home_timeline(Auth, Args) when is_tuple(Auth), is_list(Args) ->
     Url = build_url("statuses/home_timeline.xml", Args),
