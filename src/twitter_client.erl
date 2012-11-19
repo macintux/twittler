@@ -1,5 +1,5 @@
 %% Copyright (c) 2008 Nick Gerakines <nick@gerakines.net>
-%% 
+%%
 %% Permission is hereby granted, free of charge, to any person
 %% obtaining a copy of this software and associated documentation
 %% files (the "Software"), to deal in the Software without
@@ -8,10 +8,10 @@
 %% copies of the Software, and to permit persons to whom the
 %% Software is furnished to do so, subject to the following
 %% conditions:
-%% 
+%%
 %% The above copyright notice and this permission notice shall be
 %% included in all copies or substantial portions of the Software.
-%% 
+%%
 %% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 %% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 %% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -20,25 +20,25 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
-%% 
+%%
 %% @author Nick Gerakines <nick@gerakines.net>
 %% @copyright 2008-2009 Nick Gerakines
 %% @version 0.4
 %% @doc Provides access to the Twitter web service. Mostly through the
 %% clever use of REST-like requests and XML parsing.
-%% 
+%%
 %% This module attempts to provide complete access to the Twitter API. In
 %% addition, it provides a simple gen_server process template to allow calls
 %% to be made on behalf of a named user without having to send a username
 %% and password each time.
-%% 
+%%
 %% When the gen_server feature is used to make Twitter API calls for a user,
 %% a gen_server process is spawned locally and its name is prefixed to
 %% prevent named process collision.
-%% 
+%%
 %% <strong>Make sure you start inets (<code>inets:start().</code>) before you do
 %% anything.</strong>
-%% 
+%%
 %% <h4>Quick start</h4>
 %% <pre><code>
 %% 1&gt; inets:start().
@@ -96,7 +96,7 @@
     social_graph_friend_ids/2,
     friendship_exists/2,
     account_end_session/2,
-    account_verify_credentials/2, 
+    account_verify_credentials/2,
     headers/2,
     parse_status/1, parse_statuses/1, parse_user/1, parse_users/1, request_url/5,
     text_or_default/3,
@@ -113,14 +113,14 @@ status_home_timeline(Auth, Args) when is_tuple(Auth), is_list(Args) ->
     request_url(get, Url, Auth, [], fun(X) -> parse_statuses(X) end).
 
 status_friends_timeline(Auth, Args) when is_tuple(Auth), is_list(Args) ->
-    Url = case lists:keytake("id", 1, Args) of 
+    Url = case lists:keytake("id", 1, Args) of
         false -> build_url("statuses/friends_timeline" ++ ".xml", Args);
         {_, {"id", Id}, RetArgs} -> build_url("statuses/friends_timeline" ++ "/" ++ Id ++ ".xml", RetArgs)
     end,
     request_url(get, Url, Auth, [], fun(X) -> parse_statuses(X) end).
 
 status_user_timeline(Auth, Args) ->
-    Url = case lists:keytake("id", 1, Args) of 
+    Url = case lists:keytake("id", 1, Args) of
         false -> build_url("statuses/user_timeline" ++ ".xml", Args);
         {_, {"id", Id}, RetArgs} -> build_url("statuses/user_timeline" ++ "/" ++ Id ++ ".xml", RetArgs)
     end,
@@ -201,7 +201,7 @@ direct_destroy(Auth, [{"id", Id}]) ->
     request_url(get, Url, Auth, [], fun(Body) -> parse_status(Body) end).
 
 favorites(Auth, Args) ->
-    Url = case lists:keytake("id", 1, Args) of 
+    Url = case lists:keytake("id", 1, Args) of
         false -> build_url("favorites" ++ ".xml", Args);
         {value, {"id", Id}, RetArgs} -> build_url("favorites" ++ "/" ++ Id ++ ".xml", RetArgs)
     end,
@@ -236,7 +236,7 @@ friendship_destroy(Auth, [{"id", Id}]) ->
     request_url(get, Url, Auth, [], fun(Body) -> parse_user(Body) end).
 
 user_friends(Auth, Args) ->
-    Url = case lists:keytake("id", 1, Args) of 
+    Url = case lists:keytake("id", 1, Args) of
         false -> build_url("statuses/friends" ++ ".xml", Args);
         {_, {"id", Id}, RetArgs} -> build_url("statuses/friends" ++ "/" ++ Id ++ ".xml", RetArgs)
     end,
@@ -267,7 +267,7 @@ user_featured(_, _) ->
     request_url(get, Url, {nil, nil}, [], fun(Body) -> parse_users(Body) end).
 
 user_show(Auth, Args) ->
-    Url = case lists:keytake("id", 1, Args) of 
+    Url = case lists:keytake("id", 1, Args) of
         false -> build_url("users/show" ++ ".xml", Args);
         {value, {"id", Id}, RetArgs} -> build_url("users/show" ++ "/" ++ Id ++ ".xml", RetArgs)
     end,
@@ -275,51 +275,51 @@ user_show(Auth, Args) ->
 
 user_list_memberships(Auth, Args) ->
     Login = case Auth of {X, _} -> X; {X, _, _, _} -> X end,
-    Url = case lists:keytake("id", 1, Args) of 
-	false -> build_url("/" ++ Login ++ "/lists/memberships.xml", []);
-	{_, {"id", Id}, RetArgs} -> build_url("/" ++ Id ++ "/lists/memberships.xml", RetArgs)
+    Url = case lists:keytake("id", 1, Args) of
+    false -> build_url("/" ++ Login ++ "/lists/memberships.xml", []);
+    {_, {"id", Id}, RetArgs} -> build_url("/" ++ Id ++ "/lists/memberships.xml", RetArgs)
     end,
-    request_url(get, Url, Auth, [], fun(Body) -> parse_lists(Body) end).    
+    request_url(get, Url, Auth, [], fun(Body) -> parse_lists(Body) end).
 
 user_list_subscriptions(Auth, Args) ->
     Login = case Auth of {X, _} -> X; {X, _, _, _} -> X end,
-    Url = case lists:keytake("id", 1, Args) of 
-	false -> build_url("/" ++ Login ++ "/lists/subscriptions.xml", []);
-	{_, {"id", Id}, RetArgs} -> build_url("/" ++ Id ++ "/lists/subscriptions.xml", RetArgs)
+    Url = case lists:keytake("id", 1, Args) of
+    false -> build_url("/" ++ Login ++ "/lists/subscriptions.xml", []);
+    {_, {"id", Id}, RetArgs} -> build_url("/" ++ Id ++ "/lists/subscriptions.xml", RetArgs)
     end,
-    request_url(get, Url, Auth, [], fun(Body) -> parse_lists(Body) end). 
+    request_url(get, Url, Auth, [], fun(Body) -> parse_lists(Body) end).
 
 list(Auth, Args) ->
     Login = case lists:keytake("id", 1, Args) of
-	false -> case Auth of {X, _} -> X; {X, _, _, _} -> X end;
-	{_, {"id", Id}, _} -> Id end, 
-    Url = case lists:keytake("listid", 1, Args) of 
+    false -> case Auth of {X, _} -> X; {X, _, _, _} -> X end;
+    {_, {"id", Id}, _} -> Id end,
+    Url = case lists:keytake("listid", 1, Args) of
         {_, {"listid", ListId}, RetArgs} -> build_url("/" ++ Login ++ "/lists/" ++ ListId ++  ".xml", RetArgs)
     end,
     request_url(get, Url, Auth, [], fun(Body) -> parse_list(Body) end).
 
 lists(Auth, Args) ->
     Login = case Auth of {X, _} -> X; {X, _, _, _} -> X end,
-    Url = case lists:keytake("id", 1, Args) of 
-	false -> build_url("/" ++ Login ++ "/lists.xml", []);
-	{_, {"id", Id}, RetArgs} -> build_url("/" ++ Id ++ "/lists.xml", RetArgs)
+    Url = case lists:keytake("id", 1, Args) of
+    false -> build_url("/" ++ Login ++ "/lists.xml", []);
+    {_, {"id", Id}, RetArgs} -> build_url("/" ++ Id ++ "/lists.xml", RetArgs)
     end,
     request_url(get, Url, Auth, [], fun(Body) -> parse_lists(Body) end).
 
 list_statuses(Auth, Args) ->
     Login = case lists:keytake("id", 1, Args) of
-	false -> case Auth of {X, _} -> X; {X, _, _, _} -> X end;
-	{_, {"id", Id}, _} -> Id end, 
-    Url = case lists:keytake("listid", 1, Args) of 
+    false -> case Auth of {X, _} -> X; {X, _, _, _} -> X end;
+    {_, {"id", Id}, _} -> Id end,
+    Url = case lists:keytake("listid", 1, Args) of
         {_, {"listid", ListId}, RetArgs} -> build_url("/" ++ Login ++ "/lists/" ++ ListId ++  "/statuses.xml", RetArgs)
     end,
     request_url(get, Url, Auth, [], fun(Body) -> parse_statuses(Body) end).
-    
-list_members(Auth, Args) -> 
+
+list_members(Auth, Args) ->
     Login = case lists:keytake("id", 1, Args) of
-	false -> case Auth of {X, _} -> X; {X, _, _, _} -> X end;
-	{_, {"id", Id}, _} -> Id end, 
-    Url = case lists:keytake("listid", 1, Args) of 
+    false -> case Auth of {X, _} -> X; {X, _, _, _} -> X end;
+    {_, {"id", Id}, _} -> Id end,
+    Url = case lists:keytake("listid", 1, Args) of
         {_, {"listid", ListId}, RetArgs} -> build_url("/" ++ Login ++ "/" ++ ListId ++  "/members.xml", RetArgs)
     end,
     request_url(get, Url, Auth, [], fun(Body) -> parse_list_users(Body) end).
@@ -386,17 +386,20 @@ build_url(Url, Args) ->
         )
     ).
 
-request_url(get, Url, {Login, Pass}, _, Fun) ->
-    case httpc:request(get, {?BASE_URL(Url), headers(Login, Pass)}, [{timeout, 6000}], []) of
-        {ok, {_, _, Body}} -> Fun(Body);
-        Other -> {error, Other}
-    end;
-request_url(post, Url, {Login, Pass}, Args, Fun) ->
-    Body = twitter_client_utils:compose_body(Args),
-    case httpc:request(post, {?BASE_URL(Url), headers(Login, Pass), "application/x-www-form-urlencoded", Body} , [{timeout, 6000}], []) of
-        {ok, {_, _, Body2}} -> Fun(Body2);
-        Other -> {error, Other}
-    end;
+%% These versions are no longer valid, would need to implement 3-legged oauth
+%% functionality to support password auth.
+
+%% request_url(get, Url, {Login, Pass}, _, Fun) ->
+%%     case httpc:request(get, {?BASE_URL(Url), headers(Login, Pass)}, [{timeout, 6000}], []) of
+%%         {ok, {_, _, Body}} -> Fun(Body);
+%%         Other -> {error, Other}
+%%     end;
+%% request_url(post, Url, {Login, Pass}, Args, Fun) ->
+%%     Body = twitter_client_utils:compose_body(Args),
+%%     case httpc:request(post, {?BASE_URL(Url), headers(Login, Pass), "application/x-www-form-urlencoded", Body} , [{timeout, 6000}], []) of
+%%         {ok, {_, _, Body2}} -> Fun(Body2);
+%%         Other -> {error, Other}
+%%     end;
 request_url(get, Url, {Consumer, Token, Secret}, Args, Fun) ->
     case oauth:get(?BASE_URL(Url), Args, Consumer, Token, Secret) of
         {ok, {_, _, "Failed to validate oauth signature or token"}} -> {oauth_error, "Failed to validate oauth signature or token"};
@@ -457,13 +460,13 @@ parse_list(Body) ->
 
 parse_lists(Body) ->
     parse_generic(Body, fun(Xml) ->
-	[list_rec(Node) || Node <- xmerl_xpath:string("/lists_list/lists/list", Xml)]
+    [list_rec(Node) || Node <- xmerl_xpath:string("/lists_list/lists/list", Xml)]
     end).
 
 parse_list_users(Body) ->
     parse_generic(Body, fun(Xml) ->
-	[user_rec(Node) || Node <- xmerl_xpath:string("/users_list/users/user", Xml)]
-    end).	
+    [user_rec(Node) || Node <- xmerl_xpath:string("/users_list/users/user", Xml)]
+    end).
 
 status_rec(Node) when is_tuple(Node) ->
     Status = #status{
@@ -483,13 +486,13 @@ status_rec(Node) when is_tuple(Node) ->
 
 message_rec(Node) when is_tuple(Node) ->
     #message{
-        created_at = text_or_default(Node, ["/direct_message/created_at/text()"], ""), 
+        created_at = text_or_default(Node, ["/direct_message/created_at/text()"], ""),
         id = text_or_default(Node, ["/direct_message/id/text()"], ""),
         text = text_or_default(Node, ["/direct_message/text/text()"], ""),
-        sender_id = text_or_default(Node, ["/direct_message/sender_id/text()"], ""), 
-        recipient_id = text_or_default(Node, ["/direct_message/recipient_id/text()"], ""), 
-        sender_screen_name = text_or_default(Node, ["/direct_message/sender_screen_name/text()"], ""), 
-        recipient_screen_name = text_or_default(Node, ["/direct_message/recipient_screen_name/text()"], ""), 
+        sender_id = text_or_default(Node, ["/direct_message/sender_id/text()"], ""),
+        recipient_id = text_or_default(Node, ["/direct_message/recipient_id/text()"], ""),
+        sender_screen_name = text_or_default(Node, ["/direct_message/sender_screen_name/text()"], ""),
+        recipient_screen_name = text_or_default(Node, ["/direct_message/recipient_screen_name/text()"], ""),
         sender = case xmerl_xpath:string("/direct_message/sender", Node) of
             [] -> "";
             [SenderNode] -> user_rec(SenderNode)
@@ -532,19 +535,19 @@ user_rec(Node) when is_tuple(Node) ->
 
 list_rec(Node) when is_tuple(Node) ->
     ListRec = #list{
-	id = text_or_default(Node, ["id/text()"], ""),
-	name = text_or_default(Node, ["name/text()"], ""),
-	full_name = text_or_default(Node, ["full_name/text()"], ""),
-	slug = text_or_default(Node, ["slug/text()"], ""),
-	description = text_or_default(Node, ["description/text()"], ""),
-	subscriber_count = text_or_default(Node, ["subscriber_count/text()"], ""),
-	member_count = text_or_default(Node, ["member_count/text()"], ""),
-	uri = text_or_default(Node, ["uri/text()"], ""),
-	mode = text_or_default(Node, ["name/text()"], "")
+    id = text_or_default(Node, ["id/text()"], ""),
+    name = text_or_default(Node, ["name/text()"], ""),
+    full_name = text_or_default(Node, ["full_name/text()"], ""),
+    slug = text_or_default(Node, ["slug/text()"], ""),
+    description = text_or_default(Node, ["description/text()"], ""),
+    subscriber_count = text_or_default(Node, ["subscriber_count/text()"], ""),
+    member_count = text_or_default(Node, ["member_count/text()"], ""),
+    uri = text_or_default(Node, ["uri/text()"], ""),
+    mode = text_or_default(Node, ["name/text()"], "")
     },
     case xmerl_xpath:string("/list/user", Node) of
-	[] -> ListRec;
-	[UserNode] -> ListRec#list{ user = user_rec(UserNode) }
+    [] -> ListRec;
+    [UserNode] -> ListRec#list{ user = user_rec(UserNode) }
     end.
 
 parse_rate_limit(Node) when is_tuple(Node) ->
@@ -581,4 +584,3 @@ text_or_default(Xml, [Xpath | Tail], Default) ->
 int_or_default(_Xml, [], Default) -> Default;
 int_or_default(Xml, Xpath, Default) ->
     twitter_client_utils:string_to_int(text_or_default(Xml, Xpath, Default)).
-
