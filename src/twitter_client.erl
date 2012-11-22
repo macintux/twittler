@@ -104,13 +104,15 @@
 ]).
 
 -include("twitter_client.hrl").
+
+%% XXX: This will go away soon
 -include_lib("xmerl/include/xmerl.hrl").
 
 -define(BASE_URL(X), "http://api.twitter.com/1.1/" ++ X).
 
 status_home_timeline(Auth, Args) when is_tuple(Auth), is_list(Args) ->
-    Url = build_url("statuses/home_timeline.xml", Args),
-    request_url(get, Url, Auth, [], fun(X) -> parse_statuses(X) end).
+    Url = build_url("statuses/home_timeline.json", []),
+    request_url(get, Url, Auth, Args, fun(X) -> parse_statuses(X) end).
 
 status_friends_timeline(Auth, Args) when is_tuple(Auth), is_list(Args) ->
     Url = case lists:keytake("id", 1, Args) of
@@ -127,8 +129,8 @@ status_user_timeline(Auth, Args) ->
     request_url(get, Url, Auth, [], fun(X) -> parse_statuses(X) end).
 
 status_mentions(Auth, Args) ->
-    Url = build_url("statuses/mentions.xml", Args),
-    request_url(get, Url, Auth, [], fun(X) -> parse_statuses(X) end).
+    Url = build_url("statuses/mentions_timeline", Args),
+    request_url(get, Url, Auth, [], fun(X) -> echo_body(X) end).
 
 status_show(Auth, [{"id", Id}]) ->
     Url = build_url("statuses/show/" ++ Id ++ ".xml", []),
@@ -422,10 +424,9 @@ headers(User, Pass) ->
     Basic = "Basic " ++ binary_to_list(base64:encode(User ++ ":" ++ Pass)),
     [{"User-Agent", "ErlangTwitterClient/0.1"}, {"Authorization", Basic}, {"Host", "twitter.com"}].
 
-parse_statuses(Body) ->
-    parse_generic(Body, fun(Xml) ->
-        [status_rec(Node) || Node <- lists:flatten([xmerl_xpath:string("/statuses/status", Xml), xmerl_xpath:string("/direct-messages/direct_message", Xml)])]
-    end).
+%% XXX: Note: removed any support for DMs for now
+parse_statuses(JSON) ->
+    [status_rec(Node) || Node <- jsx:decode(list_to_binary(JSON)) ].
 
 parse_ids(Body) ->
     parse_generic(Body, fun(Xml) ->
@@ -468,21 +469,21 @@ parse_list_users(Body) ->
     [user_rec(Node) || Node <- xmerl_xpath:string("/users_list/users/user", Xml)]
     end).
 
-status_rec(Node) when is_tuple(Node) ->
-    Status = #status{
-        created_at = text_or_default(Node, ["/status/created_at/text()", "/direct_message/created_at/text()"], ""),
-        id = text_or_default(Node, ["/status/id/text()", "/direct_message/id/text()"], ""),
-        text = text_or_default(Node, ["/status/text/text()", "/direct_message/text/text()"], ""),
-        source = text_or_default(Node, ["/status/source/text()", "/direct_message/source/text()"], ""),
-        truncated = text_or_default(Node, ["/status/truncated/text()", "/direct_message/truncated/text()"], ""),
-        in_reply_to_status_id = text_or_default(Node, ["/status/in_reply_to_status_id/text()", "/direct_message/in_reply_to_status_id/text()"], ""),
-        in_reply_to_user_id = text_or_default(Node, ["/status/in_reply_to_user_id/text()", "/direct_message/in_reply_to_user_id/text()"], ""),
-        favorited = text_or_default(Node, ["/status/favorited/text()", "/direct_message/favorited/text()"], "")
-    },
-    case xmerl_xpath:string("/status/user|/direct_message/sender", Node) of
-        [] -> Status;
-        [UserNode] -> Status#status{ user = user_rec(UserNode) }
-    end.
+status_rec(undefined) ->
+    undefined;
+status_rec(Node) ->
+    #status{
+        created_at = proplists:get_value(<<"created_at">>, Node),
+        id = proplists:get_value(<<"id">>, Node),
+        text = proplists:get_value(<<"text">>, Node),
+        source = proplists:get_value(<<"source">>, Node),
+        truncated = proplists:get_value(<<"truncated">>, Node),
+        in_reply_to_status_id = proplists:get_value(<<"in_reply_to_status_id">>, Node),
+        in_reply_to_user_id = proplists:get_value(<<"in_reply_to_status_id">>, Node),
+        favorited = proplists:get_value(<<"favorited">>, Node),
+        %% For direct messages, this is "sender", for a status message it's "user"
+        user = user_rec(proplists:get_value(<<"sender">>, Node, proplists:get_value(<<"user">>, Node)))
+    }.
 
 message_rec(Node) when is_tuple(Node) ->
     #message{
@@ -503,35 +504,34 @@ message_rec(Node) when is_tuple(Node) ->
         end
     }.
 
-user_rec(Node) when is_tuple(Node) ->
-    UserRec = #user{
-        id = text_or_default(Node, ["/user/id/text()", "/sender/id/text()"], ""),
-        name = text_or_default(Node, ["/user/name/text()", "/sender/name/text()"], ""),
-        screen_name = text_or_default(Node, ["/user/screen_name/text()", "/sender/screen_name/text()"], ""),
-        location = text_or_default(Node, ["/user/location/text()", "/sender/location/text()"], ""),
-        description = text_or_default(Node, ["/user/description/text()", "/sender/description/text()"], ""),
-        profile_image_url = text_or_default(Node, ["/user/profile_image_url/text()", "/sender/profile_image_url/text()"], ""),
-        url = text_or_default(Node, ["/user/url/text()", "/sender/url/text()"], ""),
-        protected = text_or_default(Node, ["/user/protected/text()", "/sender/protected/text()"], ""),
-        followers_count = text_or_default(Node, ["/user/followers_count/text()", "/sender/followers_count/text()"], ""),
-        profile_background_color = text_or_default(Node, ["/user/profile_background_color/text()"], ""),
-        profile_text_color = text_or_default(Node, ["/user/profile_text_color/text()"], ""),
-        profile_link_color = text_or_default(Node, ["/user/profile_link_color/text()"], ""),
-        profile_sidebar_fill_color = text_or_default(Node, ["/user/profile_sidebar_fill_color/text()"], ""),
-        profile_sidebar_border_color = text_or_default(Node, ["/user/profile_sidebar_border_color/text()"], ""),
-        friends_count = text_or_default(Node, ["/user/friends_count/text()"], ""),
-        created_at = text_or_default(Node, ["/user/created_at/text()"], ""),
-        favourites_count = text_or_default(Node, ["/user/favourites_count/text()"], ""),
-        utc_offset = text_or_default(Node, ["/user/utc_offset/text()"], ""),
-        time_zone = text_or_default(Node, ["/user/time_zone/text()"], ""),
-        following = text_or_default(Node, ["/user/following/text()"], ""),
-        notifications = text_or_default(Node, ["/user/notifications/text()"], ""),
-        statuses_count = text_or_default(Node, ["/user/statuses_count/text()"], "")
-    },
-    case xmerl_xpath:string("/user/status", Node) of
-        [] -> UserRec;
-        [StatusNode] -> UserRec#user{ status = status_rec(StatusNode) }
-    end.
+user_rec(undefined) ->
+    undefined;
+user_rec(Node) ->
+    #user{
+        id = proplists:get_value(<<"id">>, Node),
+        name = proplists:get_value(<<"name">>, Node),
+        screen_name = proplists:get_value(<<"screen_name">>, Node),
+        location = proplists:get_value(<<"locsation">>, Node),
+        description = proplists:get_value(<<"description">>, Node),
+        %% profile_image_url = text_or_default(Node, ["/user/profile_image_url/text()", "/sender/profile_image_url/text()"], ""),
+        %% url = text_or_default(Node, ["/user/url/text()", "/sender/url/text()"], ""),
+        %% protected = text_or_default(Node, ["/user/protected/text()", "/sender/protected/text()"], ""),
+        %% followers_count = text_or_default(Node, ["/user/followers_count/text()", "/sender/followers_count/text()"], ""),
+        %% profile_background_color = text_or_default(Node, ["/user/profile_background_color/text()"], ""),
+        %% profile_text_color = text_or_default(Node, ["/user/profile_text_color/text()"], ""),
+        %% profile_link_color = text_or_default(Node, ["/user/profile_link_color/text()"], ""),
+        %% profile_sidebar_fill_color = text_or_default(Node, ["/user/profile_sidebar_fill_color/text()"], ""),
+        %% profile_sidebar_border_color = text_or_default(Node, ["/user/profile_sidebar_border_color/text()"], ""),
+        %% friends_count = text_or_default(Node, ["/user/friends_count/text()"], ""),
+        %% created_at = text_or_default(Node, ["/user/created_at/text()"], ""),
+        %% favourites_count = text_or_default(Node, ["/user/favourites_count/text()"], ""),
+        %% utc_offset = text_or_default(Node, ["/user/utc_offset/text()"], ""),
+        %% time_zone = text_or_default(Node, ["/user/time_zone/text()"], ""),
+        %% following = text_or_default(Node, ["/user/following/text()"], ""),
+        %% notifications = text_or_default(Node, ["/user/notifications/text()"], ""),
+        %% statuses_count = text_or_default(Node, ["/user/statuses_count/text()"], ""),
+        status = status_rec(proplists:get_value(<<"status">>, Node))
+    }.
 
 list_rec(Node) when is_tuple(Node) ->
     ListRec = #list{
@@ -572,15 +572,12 @@ parse_id(Node) ->
     Text = text_or_default(Node, ["/id/text()"], "0"),
     twitter_client_utils:string_to_int(Text).
 
-text_or_default(_, [], Default) -> Default;
-text_or_default(Xml, [Xpath | Tail], Default) ->
-    Res = lists:foldr(
-        fun (#xmlText{value = Val}, Acc) -> lists:append(Val, Acc); (_, Acc) -> Acc end,
-        Default,
-        xmerl_xpath:string(Xpath, Xml)
-    ),
-    text_or_default(Xml, Tail, Res).
-
 int_or_default(_Xml, [], Default) -> Default;
 int_or_default(Xml, Xpath, Default) ->
     twitter_client_utils:string_to_int(text_or_default(Xml, Xpath, Default)).
+
+echo_body(JSON) ->
+    jsx:decode(list_to_binary(JSON)).
+
+text_or_default(_X, _Y, _Z) ->
+    undefined.
