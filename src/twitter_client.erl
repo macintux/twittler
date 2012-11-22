@@ -165,7 +165,7 @@ user_rec(Node) ->
         id = proplists:get_value(<<"id">>, Node),
         name = proplists:get_value(<<"name">>, Node),
         screen_name = proplists:get_value(<<"screen_name">>, Node),
-        location = proplists:get_value(<<"locsation">>, Node),
+        location = proplists:get_value(<<"location">>, Node),
         description = proplists:get_value(<<"description">>, Node),
         %% profile_image_url = text_or_default(Node, ["/user/profile_image_url/text()", "/sender/profile_image_url/text()"], ""),
         %% url = text_or_default(Node, ["/user/url/text()", "/sender/url/text()"], ""),
