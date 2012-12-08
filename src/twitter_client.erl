@@ -66,78 +66,150 @@
 %% Need to review the header file, make sure we drop any obsolete
 %% record fields.
 -module(twitter_client).
+-behavior(gen_server).
 
 -author("Nick Gerakines <nick@gerakines.net>").
 -version("0.5").
 
--export([
-    status_home_timeline/2,
-    status_user_timeline/2,
-    status_mentions/2,
-    status_show/2,
-    favorites/2,
-    headers/2,
-    parse_status/1, parse_statuses/1,
-    request_url/5,
-    build_url/2
-]).
+%% Our API
+-export([build_auth/4, build_auth/2, start/1, timeline/2, status/1, stop/0]).
 
+%% gen_server
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
+         code_change/3]).
+
+-record(auth, {
+          ckey,
+          csecret,
+          atoken,
+          asecret,
+          method=hmac_sha1
+          }).
+
+-type auth() :: #auth{}.
+
+-record(state, {
+          auth,
+          user,
+          urls=[]
+          }).
+
+%% Twitter objects
 -include("twitter_client.hrl").
 
 -define(BASE_URL(X), "http://api.twitter.com/1.1/" ++ X).
+-define(SERVER, ?MODULE).
 
-%% https://dev.twitter.com/docs/api/1.1/get/statuses/home_timeline
-status_home_timeline(Auth, Args) when is_tuple(Auth), is_list(Args) ->
-    Url = build_url("statuses/home_timeline.json", []),
-    request_url(get, Url, Auth, Args, fun(X) -> parse_statuses(X) end).
+-type timeline() :: 'home' | 'user' | 'mentions'.
 
-%% https://dev.twitter.com/docs/api/1.1/get/statuses/user_timeline
-status_user_timeline(Auth, Args) ->
-    Url = build_url("statuses/user_timeline.json", []),
-    request_url(get, Url, Auth, Args, fun(X) -> parse_statuses(X) end).
+%% API
 
-%% https://dev.twitter.com/docs/api/1.1/get/statuses/mentions_timeline
-status_mentions(Auth, Args) ->
-    Url = build_url("statuses/mentions_timeline.json", []),
-    request_url(get, Url, Auth, Args, fun(X) -> parse_statuses(X) end).
+%% @doc Construct an authorization object
+%%
+%% @spec start(ConsumerKey::string(), ConsumerSecret::string(),
+%%             AccessToken::string(), AccessTokenSecret::string()) -> Auth::auth()
+build_auth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret) ->
+    #auth{ckey=ConsumerKey,
+          csecret=ConsumerSecret,
+          atoken=AccessToken,
+          asecret=AccessTokenSecret}.
 
-%% https://dev.twitter.com/docs/api/1.1/get/statuses/show/%3Aid
-status_show(Auth, Args) ->
-    Url = build_url("statuses/show.json", []),
-    request_url(get, Url, Auth, Args, fun(X) -> parse_status(X) end).
+%% Will eventually handle 3-legged oauth
+build_auth(ConsumerKey, ConsumerSecret) ->
+    enotimplemented.
 
-favorites(Auth, Args) ->
-    Url = build_url("favorites/list.json", []),
-    request_url(get, Url, Auth, Args, fun(X) -> parse_statuses(X) end).
+%% @doc Starts the API service
+%%
+%% @spec start(Auth::auth()) -> {ok, Pid::pid()}
+
+start(Auth) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [Auth], []).
+
+%% @doc Fetch the specified timeline with optional arguments per the Twitter API
+
+timeline(What, Args) ->
+    gen_server:call(?SERVER, {timeline, What, Args}).
 
 
-build_url(Url, []) -> Url;
-build_url(Url, Args) ->
-    Url ++ "?" ++ lists:concat(
-        lists:foldl(
-            fun (Rec, []) -> [Rec]; (Rec, Ac) -> [Rec, "&" | Ac] end, [],
-            [K ++ "=" ++ twitter_client_utils:url_encode(V) || {K, V} <- Args]
-        )
-    ).
+status(Id) ->
+    gen_server:call(?SERVER, {status, Id}).
 
-request_url(get, Url, {Consumer, Token, Secret}, Args, Fun) ->
-    case oauth:get(?BASE_URL(Url), Args, Consumer, Token, Secret) of
+stop() ->
+    gen_server:cast(?SERVER, stop).
+
+%% behavior implementation
+init([Auth]) ->
+    Urls = twitter_urls(),
+    %% call account/verify_credentials to get id, screen_name, name
+    User = twitter_call(#state{auth=Auth, urls=Urls}, verify_creds, []),
+    {ok, #state{auth=Auth, urls=Urls, user=User}}.
+
+handle_call({timeline, What, Args}, _From, State) ->
+    %% XXX : specifying home_timeline here is a temporary hack for testing
+    {reply, twitter_call(State, home_timeline, Args), State}.
+
+handle_cast(stop, State) ->
+    {stop, normal, State};
+handle_cast(_X, State) ->
+    {noreply, State}.
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVersion, State, _Extra) ->
+    {ok, State}.
+
+-record(url, {
+          url,
+          method=get,
+          result=status
+          }).
+
+-type url() :: #url{}.
+
+
+
+twitter_call(State, What, UrlArgs) ->
+    UrlDetails = proplists:get_value(What, State#state.urls),
+    request_url(UrlDetails#url.method, UrlDetails#url.url, State#state.auth,
+                UrlArgs, fun(X) -> parse_statuses(X, UrlDetails#url.result) end).
+
+twitter_urls() ->
+    [ { home_timeline, #url{url=?BASE_URL("statuses/home_timeline.json")} },
+      { user_timeline, #url{url=?BASE_URL("statuses/user_timeline.json")} },
+      { mentions_timeline, #url{url=?BASE_URL("statuses/mentions_timeline.json")} },
+      { verify_creds, #url{url=?BASE_URL("account/verify_credentials.json"), result=user} },
+      { status, #url{url=?BASE_URL("statuses/show.json")} }
+    ].
+
+request_url(get, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Args, Fun) ->
+    case oauth:get(Url, Args, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret) of
         {ok, {_, _, "Failed to validate oauth signature or token"}} -> {oauth_error, "Failed to validate oauth signature or token"};
         {ok, {_, _, Body}} -> Fun(Body);
         Other -> Other
     end.
 
-headers(nil, nil) -> [{"User-Agent", "ErlangTwitterClient/0.1"}];
-headers(User, Pass) when is_binary(User) ->
-    headers(binary_to_list(User), Pass);
-headers(User, Pass) when is_binary(Pass) ->
-    headers(User, binary_to_list(Pass));
-headers(User, Pass) ->
-    Basic = "Basic " ++ binary_to_list(base64:encode(User ++ ":" ++ Pass)),
-    [{"User-Agent", "ErlangTwitterClient/0.1"}, {"Authorization", Basic}, {"Host", "twitter.com"}].
+parse_statuses(JSON, ResultType) ->
+    filter_results(jsx:decode(list_to_binary(JSON)), ResultType).
 
-parse_statuses(JSON) ->
-    [status_rec(Node) || Node <- jsx:decode(list_to_binary(JSON)) ].
+%% Sometimes Twitter gives us a list of statuses (list of proplists),
+%% sometimes a single status (proplist). Examine the head of the
+%% (formerly JSON, now parsed) list, see if it is a tuple
+filter_results([H | T], Type) when is_tuple(H) ->
+    recify([H|T], Type);
+filter_results(Nodes, Type) ->
+    [recify(Node, Type) || Node <- Nodes].
+
+recify(Node, user) ->
+    user_rec(Node);
+recify(Node, status) ->
+    status_rec(Node).
+
+
+%%    [status_rec(Node) || Node <- jsx:decode(list_to_binary(JSON)) ].
 
 parse_status(JSON) ->
     status_rec(jsx:decode(list_to_binary(JSON))).
