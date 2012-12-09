@@ -1,75 +1,20 @@
-%% Copyright (c) 2008 Nick Gerakines <nick@gerakines.net>
-%%
-%% Permission is hereby granted, free of charge, to any person
-%% obtaining a copy of this software and associated documentation
-%% files (the "Software"), to deal in the Software without
-%% restriction, including without limitation the rights to use,
-%% copy, modify, merge, publish, distribute, sublicense, and/or sell
-%% copies of the Software, and to permit persons to whom the
-%% Software is furnished to do so, subject to the following
-%% conditions:
-%%
-%% The above copyright notice and this permission notice shall be
-%% included in all copies or substantial portions of the Software.
-%%
-%% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-%% EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-%% OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-%% NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-%% HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-%% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-%% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-%% OTHER DEALINGS IN THE SOFTWARE.
-%%
-%% @author Nick Gerakines <nick@gerakines.net>
-%% @copyright 2008-2009 Nick Gerakines
-%% @version 0.4
-%% @doc Provides access to the Twitter web service. Mostly through the
-%% clever use of REST-like requests and XML parsing.
-%%
-%% This module attempts to provide complete access to the Twitter API. In
-%% addition, it provides a simple gen_server process template to allow calls
-%% to be made on behalf of a named user without having to send a username
-%% and password each time.
-%%
-%% When the gen_server feature is used to make Twitter API calls for a user,
-%% a gen_server process is spawned locally and its name is prefixed to
-%% prevent named process collision.
-%%
-%% <strong>Make sure you start inets (<code>inets:start().</code>) before you do
-%% anything.</strong>
-%%
-%% <h4>Quick start</h4>
-%% <pre><code>
-%% 1&gt; inets:start().
-%% 2&gt; twitter_client:start("myname", "pass").
-%% 3&gt; twitter_client:account_verify_credentials("myname", "pass", []).
-%%   OR
-%% 3&gt; twitter_client:call("myname", account_verify_credentials).
-%% 4&gt; twitter_client:call("myname", user_timeline).
-%% 5&gt; twitter_client:call("myname", status_update, [{"status", "Testing the erlang_twitter twitter_client.erl library."}]).
-%% 6&gt; twitter_client:call("myname", user_timeline).
-%% </code></pre>
+%% Dropping Nick Gerakines' authorship/license, because at this point
+%% there's effectively nothing left of the original code.
+%% Will have to figure out what to do with this fork/branch.
 
 %% Updates, late 2012: converting to the 1.1 Twitter API
 %%
 %% Dropped for the moment:
 %% * DM handling
 %% * Any POST requests
-%% * Bulk retrieval of any kind, including timelines
 %% * User/list/follower/friendship/notification functions
 %%
 %% Not yet added:
 %% * Streaming
 %% * 3-legged OAuth
-%%
-%% Need to review the header file, make sure we drop any obsolete
-%% record fields.
+%% * Intelligent timeline processing
 -module(twitter_client).
 -behavior(gen_server).
-
--author("Nick Gerakines <nick@gerakines.net>").
--version("0.5").
 
 %% Our API
 -export([build_auth/4, build_auth/2, start/1, timeline/2, status/1, status/2, stop/0, search/1]).
@@ -148,9 +93,12 @@ stop() ->
 %% behavior implementation
 init([Auth]) ->
     Urls = twitter_urls(),
-    %% call account/verify_credentials to get id, screen_name, name
-    User = twitter_call(#state{auth=Auth, urls=Urls}, verify_creds, []),
-    {ok, #state{auth=Auth, urls=Urls, user=User}}.
+    init_auth(Auth, Urls, twitter_call(#state{auth=Auth, urls=Urls}, verify_creds, [])).
+
+init_auth(Auth, Urls, {ok, {user, UserData}}) ->
+    {ok, #state{auth=Auth, urls=Urls, user=UserData}};
+init_auth(_Auth, _Urls, {Error, Message}) ->
+    {stop, Message}.
 
 handle_call({timeline, What, Args}, _From, State) ->
     {reply, twitter_call(State, list_to_atom(atom_to_list(What) ++ "_timeline"), Args), State};
@@ -202,15 +150,51 @@ twitter_urls() ->
 
       { status_show, #url{url=?BASE_URL("statuses/show.json")} },
       { status_retweets, #url{url=?BASE_URL("statuses/retweets.json")} },
-      { status_oembed, #url{url=?BASE_URL("statuses/oembed.json")} },
+      { status_oembed, #url{url=?BASE_URL("statuse/oembed.json")} },
       { search, #url{url=?BASE_URL("search/tweets.json")} }
     ].
 
 request_url(get, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Args, Fun) ->
-    case oauth:get(Url, Args, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret) of
-        {ok, {_, _, "Failed to validate oauth signature or token"}} -> {oauth_error, "Failed to validate oauth signature or token"};
-        {ok, {_, _, Body}} -> Fun(Body);
-        Other -> Other
+    check_http_results(oauth:get(Url, Args, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret), Fun).
+
+check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
+    {ok, Fun(Body)};
+check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {oauth_error, extract_error_message(StatusMsg, Body) };
+check_http_results({ok, {{_HttpVersion, 403, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {forbidden, extract_error_message(StatusMsg, Body) };
+check_http_results({ok, {{_HttpVersion, 404, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {wrong_url, extract_error_message(StatusMsg, Body) };
+check_http_results({ok, {{_HttpVersion, 406, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {wrong_param, extract_error_message(StatusMsg, Body) };
+check_http_results({ok, {{_HttpVersion, 413, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {too_long_param, extract_error_message(StatusMsg, Body) };
+check_http_results({ok, {{_HttpVersion, 416, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {bad_range, extract_error_message(StatusMsg, Body) };
+check_http_results({ok, {{_HttpVersion, 420, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {retry, rate_limited, extract_error_message(StatusMsg, Body) };
+check_http_results({ok, {{_HttpVersion, 503, StatusMsg}, _Headers, Body}}, _Fun) ->
+    {retry, unavailable, extract_error_message(StatusMsg, Body) };
+check_http_results(Other, _Fun) ->
+    {unknown, Other}.
+
+
+%% Currently, Twitter provides a body message like:
+%%   { "errors": [ { "message":"Could not auth", "code":32 } ] }
+%%
+%% Unclear why the object is buried in a list.
+%%
+%% Rather than assume that structure will remain constant, attempt to
+%% decode the JSON, but return the HTTP status header if it fails.
+extract_error_message(HttpStatusMsg, Body) ->
+    try
+        Contents = jsx:decode(list_to_binary(Body)),
+        [H | _T] = proplists:get_value(list_to_binary("errors"), Contents),
+        binary_to_list(proplists:get_value(list_to_binary("message"),
+                                           H))
+    catch
+        _:_ ->
+            HttpStatusMsg
     end.
 
 parse_statuses(JSON, Type) ->
