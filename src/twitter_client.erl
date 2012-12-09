@@ -17,17 +17,17 @@
 -behavior(gen_server).
 
 %% Our API
--export([build_auth/4, build_auth/2, start/1, timeline/2, status/1, status/2, stop/0, search/1]).
+-export([build_auth/4, build_auth/3, start/1, timeline/2, status/1, status/2, stop/0, search/1]).
 
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
 
 -record(auth, {
-          ckey,
-          csecret,
-          atoken,
-          asecret,
+          ckey="",
+          csecret="",
+          atoken="",
+          asecret="",
           method=hmac_sha1
           }).
 
@@ -40,6 +40,7 @@
           }).
 
 -define(BASE_URL(X), "http://api.twitter.com/1.1/" ++ X).
+-define(OAUTH_URL(X), "http://api.twitter.com/oauth/" ++ X).
 -define(SERVER, ?MODULE).
 
 -type timeline() :: 'home' | 'user' | 'mentions'.
@@ -57,8 +58,17 @@ build_auth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret) ->
           asecret=AccessTokenSecret}.
 
 %% Will eventually handle 3-legged oauth
-build_auth(ConsumerKey, ConsumerSecret) ->
-    enotimplemented.
+build_auth(pin, ConsumerKey, ConsumerSecret) ->
+    request_url(post, ?OAUTH_URL("request_token"),
+                #auth{ckey=ConsumerKey, csecret=ConsumerSecret},
+                [{ 'oauth_callback', 'oob' }],
+                fun(Body) -> oauth:uri(?OAUTH_URL("authenticate"),
+                                       [ { 'oauth_token',
+                                           proplists:get_value("oauth_token",
+                                                               oauth:uri_params_decode(Body)) }])
+                                 end).
+
+
 
 %% @doc Starts the API service
 %%
