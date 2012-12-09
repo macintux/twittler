@@ -94,9 +94,6 @@
           urls=[]
           }).
 
-%% Twitter objects
--include("twitter_client.hrl").
-
 -define(BASE_URL(X), "http://api.twitter.com/1.1/" ++ X).
 -define(SERVER, ?MODULE).
 
@@ -145,8 +142,13 @@ init([Auth]) ->
     {ok, #state{auth=Auth, urls=Urls, user=User}}.
 
 handle_call({timeline, What, Args}, _From, State) ->
-    %% XXX : specifying home_timeline here is a temporary hack for testing
-    {reply, twitter_call(State, home_timeline, Args), State}.
+    {reply, twitter_call(State, list_to_atom(atom_to_list(What) ++ "_timeline"), Args), State};
+handle_call(whoami, _From, State) ->
+    {reply, State#state.user, State};
+handle_call({status, Id}, _From, State) ->
+    {reply, twitter_call(State, status, [ { id, Id } ]), State}.
+
+
 
 handle_cast(stop, State) ->
     {stop, normal, State};
@@ -192,76 +194,5 @@ request_url(get, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Met
         Other -> Other
     end.
 
-parse_statuses(JSON, ResultType) ->
-    filter_results(jsx:decode(list_to_binary(JSON)), ResultType).
-
-%% Sometimes Twitter gives us a list of statuses (list of proplists),
-%% sometimes a single status (proplist). Examine the head of the
-%% (formerly JSON, now parsed) list, see if it is a tuple
-filter_results([H | T], Type) when is_tuple(H) ->
-    recify([H|T], Type);
-filter_results(Nodes, Type) ->
-    [recify(Node, Type) || Node <- Nodes].
-
-recify(Node, user) ->
-    user_rec(Node);
-recify(Node, status) ->
-    status_rec(Node).
-
-
-%%    [status_rec(Node) || Node <- jsx:decode(list_to_binary(JSON)) ].
-
-parse_status(JSON) ->
-    status_rec(jsx:decode(list_to_binary(JSON))).
-
-status_rec(undefined) ->
-    undefined;
-status_rec(Node) ->
-    #status{
-        created_at = proplists:get_value(<<"created_at">>, Node),
-        id = proplists:get_value(<<"id">>, Node),
-        text = proplists:get_value(<<"text">>, Node),
-        source = proplists:get_value(<<"source">>, Node),
-        truncated = proplists:get_value(<<"truncated">>, Node),
-        in_reply_to_status_id = proplists:get_value(<<"in_reply_to_status_id">>, Node),
-        in_reply_to_user_id = proplists:get_value(<<"in_reply_to_status_id">>, Node),
-        favorited = proplists:get_value(<<"favorited">>, Node),
-        %% For direct messages, this is "sender", for a status message it's "user"
-        user = user_rec(proplists:get_value(<<"sender">>, Node, proplists:get_value(<<"user">>, Node)))
-    }.
-
-user_rec(undefined) ->
-    undefined;
-user_rec(Node) ->
-    #user{
-        id = proplists:get_value(<<"id">>, Node),
-        name = proplists:get_value(<<"name">>, Node),
-        screen_name = proplists:get_value(<<"screen_name">>, Node),
-        location = proplists:get_value(<<"location">>, Node),
-        description = proplists:get_value(<<"description">>, Node),
-        %% profile_image_url = text_or_default(Node, ["/user/profile_image_url/text()", "/sender/profile_image_url/text()"], ""),
-        %% url = text_or_default(Node, ["/user/url/text()", "/sender/url/text()"], ""),
-        %% protected = text_or_default(Node, ["/user/protected/text()", "/sender/protected/text()"], ""),
-        %% followers_count = text_or_default(Node, ["/user/followers_count/text()", "/sender/followers_count/text()"], ""),
-        %% profile_background_color = text_or_default(Node, ["/user/profile_background_color/text()"], ""),
-        %% profile_text_color = text_or_default(Node, ["/user/profile_text_color/text()"], ""),
-        %% profile_link_color = text_or_default(Node, ["/user/profile_link_color/text()"], ""),
-        %% profile_sidebar_fill_color = text_or_default(Node, ["/user/profile_sidebar_fill_color/text()"], ""),
-        %% profile_sidebar_border_color = text_or_default(Node, ["/user/profile_sidebar_border_color/text()"], ""),
-        %% friends_count = text_or_default(Node, ["/user/friends_count/text()"], ""),
-        %% created_at = text_or_default(Node, ["/user/created_at/text()"], ""),
-        %% favourites_count = text_or_default(Node, ["/user/favourites_count/text()"], ""),
-        %% utc_offset = text_or_default(Node, ["/user/utc_offset/text()"], ""),
-        %% time_zone = text_or_default(Node, ["/user/time_zone/text()"], ""),
-        %% following = text_or_default(Node, ["/user/following/text()"], ""),
-        %% notifications = text_or_default(Node, ["/user/notifications/text()"], ""),
-        %% statuses_count = text_or_default(Node, ["/user/statuses_count/text()"], ""),
-        status = status_rec(proplists:get_value(<<"status">>, Node))
-    }.
-
-%% Occasionally useful for troubleshooting
-%%
-%% echo_body([H | Body]) when H =:= $< ->
-%%     io:format("<~s~n", [ Body ]);
-%% echo_body(JSON) ->
-%%     jsx:prettify(list_to_binary(JSON)).
+parse_statuses(JSON, _Type) ->
+    jsx:decode(list_to_binary(JSON)).
