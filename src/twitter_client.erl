@@ -72,7 +72,7 @@
 -version("0.5").
 
 %% Our API
--export([build_auth/4, build_auth/2, start/1, timeline/2, status/1, stop/0]).
+-export([build_auth/4, build_auth/2, start/1, timeline/2, status/1, status/2, stop/0, search/1]).
 
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -129,7 +129,18 @@ timeline(What, Args) ->
 
 
 status(Id) ->
-    gen_server:call(?SERVER, {status, Id}).
+    gen_server:call(?SERVER, {status, show, Id}).
+
+status(Id, retweets) ->
+    gen_server:call(?SERVER, {status, retweets, Id});
+status(Id, oembed) ->
+    gen_server:call(?SERVER, {status, oembed, Id}).
+
+search(Query) ->
+    gen_server:call(?SERVER, {search, Query, []}).
+
+search(Query, Args) ->
+    gen_server:call(?SERVER, {search, Query, Args}).
 
 stop() ->
     gen_server:cast(?SERVER, stop).
@@ -145,8 +156,10 @@ handle_call({timeline, What, Args}, _From, State) ->
     {reply, twitter_call(State, list_to_atom(atom_to_list(What) ++ "_timeline"), Args), State};
 handle_call(whoami, _From, State) ->
     {reply, State#state.user, State};
-handle_call({status, Id}, _From, State) ->
-    {reply, twitter_call(State, status, [ { id, Id } ]), State}.
+handle_call({status, What, Id}, _From, State) ->
+    {reply, twitter_call(State, list_to_atom("status_" ++ atom_to_list(What)), [ { id, Id } ]), State};
+handle_call({search, Query, Args}, _From, State) ->
+    {reply, twitter_call(State, search, [{ q, Query }] ++ Args), State}.
 
 
 
@@ -183,8 +196,14 @@ twitter_urls() ->
     [ { home_timeline, #url{url=?BASE_URL("statuses/home_timeline.json")} },
       { user_timeline, #url{url=?BASE_URL("statuses/user_timeline.json")} },
       { mentions_timeline, #url{url=?BASE_URL("statuses/mentions_timeline.json")} },
+      { retweets_of_me_timeline, #url{url=?BASE_URL("statuses/retweets_of_me.json")} },
+
       { verify_creds, #url{url=?BASE_URL("account/verify_credentials.json"), result=user} },
-      { status, #url{url=?BASE_URL("statuses/show.json")} }
+
+      { status_show, #url{url=?BASE_URL("statuses/show.json")} },
+      { status_retweets, #url{url=?BASE_URL("statuses/retweets.json")} },
+      { status_oembed, #url{url=?BASE_URL("statuses/oembed.json")} },
+      { search, #url{url=?BASE_URL("search/tweets.json")} }
     ].
 
 request_url(get, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Args, Fun) ->
