@@ -154,8 +154,8 @@ twitter_urls() ->
       { search, #url{url=?BASE_URL("search/tweets.json")} }
     ].
 
-request_url(get, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Args, Fun) ->
-    check_http_results(oauth:get(Url, Args, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret), Fun).
+request_url(HttpMethod, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Args, Fun) ->
+    check_http_results(apply(oauth, HttpMethod, [Url, Args, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret]), Fun).
 
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
     {ok, Fun(Body)};
