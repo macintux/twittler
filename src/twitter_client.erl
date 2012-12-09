@@ -194,5 +194,5 @@ request_url(get, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Met
         Other -> Other
     end.
 
-parse_statuses(JSON, _Type) ->
-    jsx:decode(list_to_binary(JSON)).
+parse_statuses(JSON, Type) ->
+    { Type, jsx:decode(list_to_binary(JSON)) }.
