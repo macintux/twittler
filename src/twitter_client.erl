@@ -17,7 +17,7 @@
 -behavior(gen_server).
 
 %% Our API
--export([build_auth/4, build_auth/3, start/1, timeline/2, status/1, status/2, stop/0, search/1]).
+-export([dev_auth/4, pin_auth/2, pin_auth/4, start/1, timeline/2, status/1, status/2, stop/0, search/1]).
 
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -40,34 +40,67 @@
           }).
 
 -define(BASE_URL(X), "http://api.twitter.com/1.1/" ++ X).
--define(OAUTH_URL(X), "http://api.twitter.com/oauth/" ++ X).
+-define(OAUTH_URL(X), "https://api.twitter.com/oauth/" ++ X).
 -define(SERVER, ?MODULE).
 
 -type timeline() :: 'home' | 'user' | 'mentions'.
 
 %% API
 
-%% @doc Construct an authorization object
+%% @doc Construct an authorization object with developer access token
 %%
 %% @spec start(ConsumerKey::string(), ConsumerSecret::string(),
 %%             AccessToken::string(), AccessTokenSecret::string()) -> Auth::auth()
-build_auth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret) ->
+dev_auth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret) ->
+    inets:start(),
     #auth{ckey=ConsumerKey,
           csecret=ConsumerSecret,
           atoken=AccessToken,
           asecret=AccessTokenSecret}.
 
-%% Will eventually handle 3-legged oauth
-build_auth(pin, ConsumerKey, ConsumerSecret) ->
-    request_url(post, ?OAUTH_URL("request_token"),
-                #auth{ckey=ConsumerKey, csecret=ConsumerSecret},
-                [{ 'oauth_callback', 'oob' }],
-                fun(Body) -> oauth:uri(?OAUTH_URL("authenticate"),
-                                       [ { 'oauth_token',
-                                           proplists:get_value("oauth_token",
-                                                               oauth:uri_params_decode(Body)) }])
-                                 end).
+%% @doc Retrieve URL that will allow user to get PIN to proceed.
+%%      Return value will be { Url, Token }, where the Url should be
+%%      given to the user to generate a Twitter PIN, and the token
+%%      should be the third argument passed to pin_auth/4
+%%
+%% @see pin_auth/4
+pin_auth(ConsumerKey, ConsumerSecret) ->
+    inets:start(),
+    ssl:start(),
+    {ok, OAuthToken} =
+        request_url(post, ?OAUTH_URL("request_token"),
+                    #auth{ckey=ConsumerKey, csecret=ConsumerSecret},
+                    [{ 'oauth_callback', 'oob' }],
+                    fun(Body) -> proplists:get_value("oauth_token",
+                                                     oauth:uri_params_decode(Body))
+                    end),
+    { oauth:uri(?OAUTH_URL("authenticate"),
+                [ { 'oauth_token', OAuthToken } ]),
+      OAuthToken }.
 
+%% @doc Leverage user PIN to retrieve access token. Returns Auth
+%%      object.  Beyond the app key/secret, takes the oauth_token as
+%%      retrieved from the first step and the user-provided PIN as
+%%      arguments.
+%%
+%%      IMPORTANT: It is necessary that the PIN be passed as a list
+%%      (string), not an integer, if it is prefaced with a 0.
+%%
+%% @see pin_auth/2
+pin_auth(ConsumerKey, ConsumerSecret, RequestToken, PIN) ->
+    {ok, Auth} =
+        request_url(post, ?OAUTH_URL("access_token"),
+                #auth{ckey=ConsumerKey, csecret=ConsumerSecret},
+                [{ oauth_verifier, PIN },
+                 { oauth_token, RequestToken}],
+                fun(Body) ->
+                        Proplist = oauth:uri_params_decode(Body),
+                        #auth{ckey=ConsumerKey, csecret=ConsumerSecret,
+                              atoken=proplists:get_value("oauth_token",
+                                                         Proplist),
+                              asecret=proplists:get_value("oauth_token_secret",
+                                                          Proplist)} end),
+    Auth.
 
 
 %% @doc Starts the API service
@@ -169,7 +202,8 @@ request_url(HttpMethod, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, met
 
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
     {ok, Fun(Body)};
-check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, _Headers, Body}}, _Fun) ->
+check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, Headers, Body}}, _Fun) ->
+    io:format("~p~n", [ Headers ]),
     {oauth_error, extract_error_message(StatusMsg, Body) };
 check_http_results({ok, {{_HttpVersion, 403, StatusMsg}, _Headers, Body}}, _Fun) ->
     {forbidden, extract_error_message(StatusMsg, Body) };
@@ -197,6 +231,7 @@ check_http_results(Other, _Fun) ->
 %% Rather than assume that structure will remain constant, attempt to
 %% decode the JSON, but return the HTTP status header if it fails.
 extract_error_message(HttpStatusMsg, Body) ->
+    io:format("~s~n", [ Body ]),
     try
         Contents = jsx:decode(list_to_binary(Body)),
         [H | _T] = proplists:get_value(list_to_binary("errors"), Contents),
