@@ -203,7 +203,6 @@ request_url(HttpMethod, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, met
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
     {ok, Fun(Body)};
 check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, Headers, Body}}, _Fun) ->
-    io:format("~p~n", [ Headers ]),
     {oauth_error, extract_error_message(StatusMsg, Body) };
 check_http_results({ok, {{_HttpVersion, 403, StatusMsg}, _Headers, Body}}, _Fun) ->
     {forbidden, extract_error_message(StatusMsg, Body) };
@@ -231,7 +230,6 @@ check_http_results(Other, _Fun) ->
 %% Rather than assume that structure will remain constant, attempt to
 %% decode the JSON, but return the HTTP status header if it fails.
 extract_error_message(HttpStatusMsg, Body) ->
-    io:format("~s~n", [ Body ]),
     try
         Contents = jsx:decode(list_to_binary(Body)),
         [H | _T] = proplists:get_value(list_to_binary("errors"), Contents),
