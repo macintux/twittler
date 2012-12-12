@@ -67,7 +67,7 @@ dev_auth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret) ->
 pin_auth(ConsumerKey, ConsumerSecret) ->
     inets:start(),
     ssl:start(),
-    {ok, OAuthToken} =
+    OAuthToken =
         request_url(post, ?OAUTH_URL("request_token"),
                     #auth{ckey=ConsumerKey, csecret=ConsumerSecret},
                     [{ 'oauth_callback', 'oob' }],
@@ -88,8 +88,7 @@ pin_auth(ConsumerKey, ConsumerSecret) ->
 %%
 %% @see pin_auth/2
 pin_auth(ConsumerKey, ConsumerSecret, RequestToken, PIN) ->
-    {ok, Auth} =
-        request_url(post, ?OAUTH_URL("access_token"),
+    request_url(post, ?OAUTH_URL("access_token"),
                 #auth{ckey=ConsumerKey, csecret=ConsumerSecret},
                 [{ oauth_verifier, PIN },
                  { oauth_token, RequestToken}],
@@ -99,8 +98,8 @@ pin_auth(ConsumerKey, ConsumerSecret, RequestToken, PIN) ->
                               atoken=proplists:get_value("oauth_token",
                                                          Proplist),
                               asecret=proplists:get_value("oauth_token_secret",
-                                                          Proplist)} end),
-    Auth.
+                                                          Proplist)} end).
+
 
 
 %% @doc Starts the API service
@@ -138,10 +137,10 @@ init([Auth]) ->
     Urls = twitter_urls(),
     init_auth(Auth, Urls, twitter_call(#state{auth=Auth, urls=Urls}, verify_creds, [])).
 
-init_auth(Auth, Urls, {ok, {user, UserData}}) ->
-    {ok, #state{auth=Auth, urls=Urls, user=UserData}};
 init_auth(_Auth, _Urls, {Error, Message}) ->
-    {stop, Message}.
+    {stop, Message};
+init_auth(Auth, Urls, UserData) ->
+    {ok, #state{auth=Auth, urls=Urls, user=UserData}}.
 
 handle_call({timeline, What, Args}, _From, State) ->
     {reply, twitter_call(State, list_to_atom(atom_to_list(What) ++ "_timeline"), Args), State};
@@ -181,7 +180,7 @@ code_change(_OldVersion, State, _Extra) ->
 twitter_call(State, What, UrlArgs) ->
     UrlDetails = proplists:get_value(What, State#state.urls),
     request_url(UrlDetails#url.method, UrlDetails#url.url, State#state.auth,
-                UrlArgs, fun(X) -> parse_statuses(X, UrlDetails#url.result) end).
+                UrlArgs, fun(X) -> parse_statuses(X) end).
 
 twitter_urls() ->
     [ { home_timeline, #url{url=?BASE_URL("statuses/home_timeline.json")} },
@@ -201,7 +200,7 @@ request_url(HttpMethod, Url, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, met
     check_http_results(apply(oauth, HttpMethod, [Url, Args, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret]), Fun).
 
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
-    {ok, Fun(Body)};
+    Fun(Body);
 check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, Headers, Body}}, _Fun) ->
     {oauth_error, extract_error_message(StatusMsg, Body) };
 check_http_results({ok, {{_HttpVersion, 403, StatusMsg}, _Headers, Body}}, _Fun) ->
@@ -240,5 +239,5 @@ extract_error_message(HttpStatusMsg, Body) ->
             HttpStatusMsg
     end.
 
-parse_statuses(JSON, Type) ->
-    { Type, jsx:decode(list_to_binary(JSON)) }.
+parse_statuses(JSON) ->
+    jsx:decode(list_to_binary(JSON)).
