@@ -18,7 +18,7 @@
 
 %% Our API
 -export([dev_auth/4, pin_auth/2, pin_auth/4, start/1, timeline/2,
-         status/1, status/2, stop/0, search/1, stream/3]).
+         status/1, status/2, stop/0, search/1, search/2, stream/3]).
 
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
