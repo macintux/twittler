@@ -21,7 +21,7 @@
 %% Timeline results: [<list of tweets>]
 
 -record(state, {
-          desired, %% Which timeline we want, or search query. Need better word
+          'query', %% Which timeline we want, or search query. Need better word
           api_call, %% twitter_client:timeline or twitter_client:search
           results_parser, %% search and timeline return different types of lists
           per_msg_fun, %% Client-provided function to run against each message
@@ -35,7 +35,7 @@
 search(Query, {count, X}, Fun) when X > ?MAX_SEARCH_REQ ->
     {State, List} =
         unified(X, ?MAX_SEARCH_REQ, [], [],
-            #state{desired = Query,
+            #state{'query' = Query,
                    api_call = fun twitter_client:search/2,
                    results_parser = fun(Y) -> proplists:get_value(<<"statuses">>, Y) end,
                    per_msg_fun = Fun}),
@@ -43,7 +43,7 @@ search(Query, {count, X}, Fun) when X > ?MAX_SEARCH_REQ ->
 search(Query, {count, X}, Fun) ->
     {State, List} =
         unified(X, X, [], [],
-            #state{desired = Query,
+            #state{'query' = Query,
                    api_call = fun twitter_client:search/2,
                    results_parser = fun(Y) -> proplists:get_value(<<"statuses">>, Y) end,
                    per_msg_fun = Fun}),
@@ -53,7 +53,7 @@ search(Query, {count, X}, Fun) ->
 timeline(Which, {count, X}, Fun) when X > ?MAX_TL_REQ ->
     {State, List} =
         unified(X, ?MAX_TL_REQ, [], [],
-            #state{desired = Which,
+            #state{'query' = Which,
                    api_call = fun twitter_client:timeline/2,
                    results_parser = fun(Y) -> Y end,
                    per_msg_fun = Fun}),
@@ -61,7 +61,7 @@ timeline(Which, {count, X}, Fun) when X > ?MAX_TL_REQ ->
 timeline(Which, {count, X}, Fun) ->
     {State, List} =
         unified(X, X, [], [],
-            #state{desired = Which,
+            #state{'query' = Which,
                    api_call = fun twitter_client:timeline/2,
                    results_parser = fun(Y) -> Y end,
                    per_msg_fun = Fun}),
@@ -128,7 +128,7 @@ do_call(NextQty, State) ->
 do_call(Qty, State, 0) ->
     apply(State#state.results_parser,
           [ apply(State#state.api_call,
-                [State#state.desired,
+                [State#state.'query',
                  State#state.args ++
                      [{count, Qty}]])
           ]
@@ -139,7 +139,7 @@ do_call(Qty, State, 0) ->
 do_call(Qty, State, MinId) ->
     apply(State#state.results_parser,
           [ apply(State#state.api_call,
-                [State#state.desired,
+                [State#state.'query',
                  State#state.args ++
                      [{count, Qty},
                       {max_id, MinId - 1}]])
