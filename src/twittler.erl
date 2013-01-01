@@ -13,7 +13,7 @@
 %% * Streaming
 %% * 3-legged OAuth
 %% * Intelligent timeline processing
--module(twitter_client).
+-module(twittler).
 -behavior(gen_server).
 
 %% Our API

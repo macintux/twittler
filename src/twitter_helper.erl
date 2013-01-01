@@ -22,7 +22,7 @@
 
 -record(state, {
           'query', %% Which timeline we want, or search query. Need better word
-          api_call, %% twitter_client:timeline or twitter_client:search
+          api_call, %% twittler:timeline or twittler:search
           results_parser, %% search and timeline return different types of lists
           per_msg_fun, %% Client-provided function to run against each message
           max_id=0, %% First message we encounter
@@ -36,7 +36,7 @@ search(Query, {count, X}, Fun) when X > ?MAX_SEARCH_REQ ->
     {State, List} =
         unified(X, ?MAX_SEARCH_REQ, [], [],
             #state{'query' = Query,
-                   api_call = fun twitter_client:search/2,
+                   api_call = fun twittler:search/2,
                    results_parser = fun(Y) -> proplists:get_value(<<"statuses">>, Y) end,
                    per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ];
@@ -44,7 +44,7 @@ search(Query, {count, X}, Fun) ->
     {State, List} =
         unified(X, X, [], [],
             #state{'query' = Query,
-                   api_call = fun twitter_client:search/2,
+                   api_call = fun twittler:search/2,
                    results_parser = fun(Y) -> proplists:get_value(<<"statuses">>, Y) end,
                    per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
@@ -54,7 +54,7 @@ timeline(Which, {count, X}, Fun) when X > ?MAX_TL_REQ ->
     {State, List} =
         unified(X, ?MAX_TL_REQ, [], [],
             #state{'query' = Which,
-                   api_call = fun twitter_client:timeline/2,
+                   api_call = fun twittler:timeline/2,
                    results_parser = fun(Y) -> Y end,
                    per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ];
@@ -62,7 +62,7 @@ timeline(Which, {count, X}, Fun) ->
     {State, List} =
         unified(X, X, [], [],
             #state{'query' = Which,
-                   api_call = fun twitter_client:timeline/2,
+                   api_call = fun twittler:timeline/2,
                    results_parser = fun(Y) -> Y end,
                    per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
