@@ -8,7 +8,7 @@
 %%% @end
 %%% Created : 11 Dec 2012 by John Daily <jd@epep.us>
 
--module(twitter_helper).
+-module(te_helper).
 -export([timeline/3, extract_urls/1, extract_retweet/1, search/3]).
 
 -export([test_timeline/0, test_search/0]).
