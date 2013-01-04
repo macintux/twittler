@@ -1,16 +1,16 @@
 Erlang Twitter API library.
 
-# Status
+## Status
 
 This is still very primitive (needs supervision, many functionality
 gaps remain, zero documentation) but is usable today.
 
-# Dependencies
+## Dependencies
 
 * OAuth: [erlang-oauth](https://github.com/tim/erlang-oauth)
 * JSON: [jsx](https://github.com/talentdeficit/jsx)
 
-# Building
+## Building
 
 Nothing fancy here yet. Build `jsx` and `erlang-oauth`, copy their
 beam files into this project's `ebin/` folder, and run `make` to build
@@ -19,7 +19,7 @@ beam files into this project's `ebin/` folder, and run `make` to build
 You'll see multiple warnings that I haven't yet gotten around to
 fixing.
 
-# Running, illustrated
+## Running, illustrated
 
 There is no support for unauthenticated API calls so you'll need a
 consumer key and secret, which can be obtained free of charge from
@@ -144,7 +144,7 @@ Want to see everyone who has recently sent a tweet with Erlang and the
      {tweets,[ok,ok,ok,ok,ok]}]
 
 
-# History
+## History
 
 This library originated with Nick Gerakines
 (https://github.com/ngerakines/erlang_twitter) and my intent was to
