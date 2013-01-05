@@ -191,9 +191,11 @@ code_change(_OldVersion, State, _Extra) ->
 
 -type url() :: #url{}.
 
+%% Until we have supervision established, use spawn_link so we can
+%% close a streaming process by stopping the main server
 twitter_stream(State, What, UrlArgs, From) ->
     UrlDetails = proplists:get_value(What, State#state.urls),
-    spawn(fun() -> stream_start(State, From, UrlDetails, UrlArgs) end).
+    spawn_link(fun() -> stream_start(State, From, UrlDetails, UrlArgs) end).
 
 stream_start(State, From, UrlDetails, UrlArgs) ->
     {requestid, RequestID} =
