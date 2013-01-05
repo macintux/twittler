@@ -137,14 +137,14 @@ because URLs are occasionally truncated otherwise.
 Want to see everyone who has recently sent a tweet with Erlang and the
 `#code2012` hash tag? Of course you do.
 
-    23> te_helper:search("#code2012 erlang", {count, 5}, fun(X) -> io:format("~s (@~s)~n", [binary_to_list(proplists:get_value(<<"name">>, proplists:get_value(<<"user">>, X))), binary_to_list(proplists:get_value(<<"screen_name">>, proplists:get_value(<<"user">>, X)))]) end).
-    moshe adormeo (@MozManofOz)
-    ErlangDC (@ErlangDC)
-    Tobias Lindahl (@LindahlTobias)
-    Alex Teut (@jaturken)
-    Khashayar Abdoli (@KhNapster)
-    [{max_id,286920434102968320},
-     {min_id,286842295666491392},
+    23> te_helper:search("#code2012 erlang", {count, 5}, fun(X) -> io:format("~ts (@~s)~n", [proplists:get_value(<<"name">>, proplists:get_value(<<"user">>, X)), proplists:get_value(<<"screen_name">>, proplists:get_value(<<"user">>, X))]) end).
+    Freddy (@gUstehn)
+    Björn-Egil Dahlberg (@psyeugenic)
+    Martin Wiso (@tajgur)
+    Dr. Andrew F Ledvina (@wolfgangFabian)
+    Erlanger (@remonde1986)
+    [{max_id,287549052034375680},
+     {min_id,287110826383523841},
      {tweets,[ok,ok,ok,ok,ok]}]
 
 
