@@ -54,6 +54,10 @@ invocation of `pin_auth`.
           "BYnCOiArIAWZZWDEqE7RIKH6VpSVfjrd87GF5q0",hmac_sha1}
     6> twittler:start(Auth).
     {ok,<0.71.0>}
+
+`start/1` will fire up a process to maintain state. There is no
+mechanism in place yet to restart it if it fails.
+
     7> twittler:timeline(home, []).
     [[{<<"created_at">>,<<"Fri Jan 04 02:16:24 +0000 2013">>},
       {<<"id">>,287019620316102657},
