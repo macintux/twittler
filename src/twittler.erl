@@ -1,18 +1,15 @@
-%% Dropping Nick Gerakines' authorship/license, because at this point
-%% there's effectively nothing left of the original code.
-%% Will have to figure out what to do with this fork/branch.
+%%% @author John Daily <jd@epep.us>
+%%% @copyright (C) 2013, John Daily
+%%% @doc
+%%%    Twitter 1.1 API.
+%%% @end
 
-%% Updates, late 2012: converting to the 1.1 Twitter API
-%%
-%% Dropped for the moment:
+%% Missing:
 %% * DM handling
 %% * Any POST requests
 %% * User/list/follower/friendship/notification functions
-%%
-%% Not yet added:
-%% * Streaming
 %% * 3-legged OAuth
-%% * Intelligent timeline processing
+
 -module(twittler).
 -behavior(gen_server).
 
@@ -152,7 +149,7 @@ init([Auth]) ->
     Urls = twitter_urls(),
     init_auth(Auth, Urls, twitter_call(#state{auth=Auth, urls=Urls}, verify_creds, [])).
 
-init_auth(_Auth, _Urls, {Error, Message}) ->
+init_auth(_Auth, _Urls, {_Error, Message}) ->
     {stop, Message};
 init_auth(Auth, Urls, UserData) ->
     {ok, #state{auth=Auth, urls=Urls, user=UserData}}.
@@ -215,7 +212,7 @@ stream_loop(RequestId, From, LoopState) ->
             io:format("Got headers: ~p~n", [ Headers ]),
             stream_loop(RequestId, From, LoopState);
         { http, { RequestId, stream, Bin } } ->
-            %% Send each Tweet to the
+            %% Send each Tweet to the requesting process's mailbox
             From ! Bin,
             stream_loop(RequestId, From, LoopState);
         { http, { RequestId, stream_end, Headers } } ->
@@ -256,7 +253,7 @@ request_url(HttpMethod, {url, Url, UrlArgs}, {httpc, HttpcArgs}, #auth{ckey=Cons
 
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
     Fun(Body);
-check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, Headers, Body}}, _Fun) ->
+check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, _Headers, Body}}, _Fun) ->
     {oauth_error, extract_error_message(StatusMsg, Body) };
 check_http_results({ok, {{_HttpVersion, 403, StatusMsg}, _Headers, Body}}, _Fun) ->
     {forbidden, extract_error_message(StatusMsg, Body) };
