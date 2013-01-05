@@ -156,8 +156,8 @@ init_auth(Auth, Urls, UserData) ->
 
 handle_call({timeline, What, Args}, _From, State) ->
     {reply, twitter_call(State, list_to_atom(atom_to_list(What) ++ "_timeline"), Args), State};
-handle_call({stream, filter, {track, Track}}, From, State) ->
-    StreamPid = twitter_stream(State, filter_stream, {track, Track}, From),
+handle_call({stream, filter, {track, Track}}, {FromPid, _Tag}, State) ->
+    StreamPid = twitter_stream(State, filter_stream, {track, Track}, FromPid),
     {reply, ok, State#state{stream=StreamPid}};
 handle_call(whoami, _From, State) ->
     {reply, State#state.user, State};
@@ -213,7 +213,8 @@ stream_loop(RequestId, From, LoopState) ->
             stream_loop(RequestId, From, LoopState);
         { http, { RequestId, stream, Bin } } ->
             %% Send each Tweet to the requesting process's mailbox
-            From ! Bin,
+            io:format("Received data (~p), sending to pid ~p~n", [Bin, From]),
+            From ! parse_statuses(Bin),
             stream_loop(RequestId, From, LoopState);
         { http, { RequestId, stream_end, Headers } } ->
             io:format("Received closing headers: ~p~n", [ Headers ]),
@@ -297,5 +298,8 @@ extract_error_message(HttpStatusMsg, Body) ->
             HttpStatusMsg
     end.
 
+
+parse_statuses(JSON) when is_binary(JSON) ->
+    jsx:decode(JSON);
 parse_statuses(JSON) ->
     jsx:decode(list_to_binary(JSON)).
