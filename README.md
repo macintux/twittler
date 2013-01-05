@@ -5,6 +5,8 @@ Erlang Twitter API library.
 This is still very primitive (needs supervision, many functionality
 gaps remain, zero documentation) but is usable today.
 
+(However, streaming is broken.)
+
 ## Dependencies
 
 * OAuth: [erlang-oauth](https://github.com/tim/erlang-oauth)
