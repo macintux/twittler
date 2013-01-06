@@ -5,7 +5,8 @@ Erlang Twitter API library.
 This is still very primitive (needs supervision, many functionality
 gaps remain, zero documentation) but is usable today.
 
-(However, streaming is broken.)
+For the moment I have pulled all streaming code from master, but the
+`streaming` branch will have a sorta functional implementation.
 
 ## Dependencies
 
