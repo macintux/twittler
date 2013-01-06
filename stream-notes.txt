@@ -1,0 +1,41 @@
+%% Just because Twitter offers 3 different types of filters via post
+%% and 2 other public streams (sample, firehose) via get, plus user
+%% and site streams via get doesn't mean I need to make my API quite
+%% that convoluted
+
+Capture list of streams:
+* Site streams require permission. Leave alone for now.
+* User streams are fairly complex but should be doable
+* Sample stream gives random tweets
+* Firehose stream gives all tweets, restricted. If sample works, firehose should too(?)
+* Filter/follow - like following a set of users
+* Filter/track - keyword search
+* Filter/locations
+
+
+stream(track, []) (optional 3rd argument)
+stream(follow, [])
+stream(locations, [])
+stream(user) (optional 2nd argument)
+stream(sample) (optional 2nd argument)
+stream(firehose) (optional 2nd argument)
+
+## Need to watch for extra streaming messages (these are mandatory)
+  * Blank lines (keep-alive)
+  * Tweet deletion notices (sigh)
+  * Location deletion notices
+  * Limit notices
+  * Withheld notices
+  * Disconnect messages
+
+For user streams
+  * Friends list
+  * Events (blocks, favorites)
+
+For site streams (disregard for now)...
+
+
+May want to grab blocked users GET blocks/ids
+
+
+https://dev.twitter.com/docs/streaming-apis/messages
