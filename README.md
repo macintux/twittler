@@ -19,9 +19,6 @@ Nothing fancy here yet. Build `jsx` and `erlang-oauth`, copy their
 beam files into this project's `ebin/` folder, and run `make` to build
 `twittler` itself.
 
-You'll see multiple warnings that I haven't yet gotten around to
-fixing.
-
 ## Running, illustrated
 
 There is no support for unauthenticated API calls so you'll need a
