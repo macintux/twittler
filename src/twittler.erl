@@ -9,13 +9,14 @@
 %% * Any POST requests
 %% * User/list/follower/friendship/notification functions
 %% * 3-legged OAuth
+%% * Streaming
 
 -module(twittler).
 -behavior(gen_server).
 
 %% Our API
 -export([dev_auth/4, pin_auth/2, pin_auth/4, start/1, timeline/2,
-         status/1, status/2, stop/0, search/1, search/2, stream/3]).
+         status/1, status/2, stop/0, search/1, search/2]).
 
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -34,14 +35,11 @@
 -record(state, {
           auth,
           user,
-          urls=[],
-          stream=undefined
+          urls=[]
           }).
 
 -define(BASE_URL(X), "http://api.twitter.com/1.1/" ++ X).
 -define(OAUTH_URL(X), "https://api.twitter.com/oauth/" ++ X).
--define(USER_STREAM_URL(X), "https://userstream.twitter.com/1.1/" ++ X).
--define(PUBLIC_STREAM_URL(X), "https://stream.twitter.com/1.1/" ++ X).
 
 -define(SERVER, ?MODULE).
 
@@ -135,11 +133,6 @@ search(Query) ->
 search(Query, Args) ->
     gen_server:call(?SERVER, {search, Query, Args}).
 
-%% Sample ArgList: [ "erlang", "rabbitmq" ]
-%% Discuss: should this be cast() or call()?
-stream(filter, track, ArgList) ->
-    gen_server:call(?SERVER, {stream, filter, { track, string:join(ArgList, ",") }}).
-
 stop() ->
     gen_server:cast(?SERVER, stop).
 
@@ -156,9 +149,6 @@ init_auth(Auth, Urls, UserData) ->
 
 handle_call({timeline, What, Args}, _From, State) ->
     {reply, twitter_call(State, list_to_atom(atom_to_list(What) ++ "_timeline"), Args), State};
-handle_call({stream, filter, {track, Track}}, {FromPid, _Tag}, State) ->
-    StreamPid = twitter_stream(State, filter_stream, {track, Track}, FromPid),
-    {reply, ok, State#state{stream=StreamPid}};
 handle_call(whoami, _From, State) ->
     {reply, State#state.user, State};
 handle_call({status, What, Id}, _From, State) ->
@@ -169,7 +159,6 @@ handle_call({search, Query, Args}, _From, State) ->
 
 
 handle_cast(stop, State) ->
-%%    exit(State#state.stream, kill), % XXX Need to create supervisor role for the streaming child
     {stop, normal, State};
 handle_cast(_X, State) ->
     {noreply, State}.
@@ -191,40 +180,6 @@ code_change(_OldVersion, State, _Extra) ->
 
 -type url() :: #url{}.
 
-%% Until we have supervision established, use spawn_link so we can
-%% close a streaming process by stopping the main server
-twitter_stream(State, What, UrlArgs, From) ->
-    UrlDetails = proplists:get_value(What, State#state.urls),
-    spawn_link(fun() -> stream_start(State, From, UrlDetails, UrlArgs) end).
-
-stream_start(State, From, UrlDetails, UrlArgs) ->
-    {requestid, RequestID} =
-        request_url(UrlDetails#url.method,
-                    {url, UrlDetails#url.url, [ UrlArgs ] },
-                    {httpc, [ { stream, self }, { sync, false } ]},
-                    State#state.auth,
-                    undefined
-                   ),
-    stream_loop(RequestID, From, []).
-
-stream_loop(RequestId, From, LoopState) ->
-    receive
-        { http, { RequestId, stream_start, Headers } } ->
-            %% do nothing
-            io:format("Got headers: ~p~n", [ Headers ]),
-            stream_loop(RequestId, From, LoopState);
-        { http, { RequestId, stream, Bin } } ->
-            %% Send each Tweet to the requesting process's mailbox
-            io:format("Received data (~p), sending to pid ~p~n", [Bin, From]),
-            From ! parse_statuses(Bin),
-            stream_loop(RequestId, From, LoopState);
-        { http, { RequestId, stream_end, Headers } } ->
-            io:format("Received closing headers: ~p~n", [ Headers ]),
-            ok
-    end.
-
-
-
 twitter_call(State, What, UrlArgs) ->
     UrlDetails = proplists:get_value(What, State#state.urls),
     request_url(UrlDetails#url.method,
@@ -244,8 +199,7 @@ twitter_urls() ->
       { status_show, #url{url=?BASE_URL("statuses/show.json")} },
       { status_retweets, #url{url=?BASE_URL("statuses/retweets.json")} },
       { status_oembed, #url{url=?BASE_URL("statuse/oembed.json")} },
-      { search, #url{url=?BASE_URL("search/tweets.json")} },
-      { filter_stream, #url{url=?PUBLIC_STREAM_URL("statuses/filter.json"), method=post} }
+      { search, #url{url=?BASE_URL("search/tweets.json")} }
     ].
 
 request_url(HttpMethod, {url, Url, UrlArgs}, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Fun) ->
@@ -274,10 +228,6 @@ check_http_results({ok, {{_HttpVersion, 429, StatusMsg}, _Headers, Body}}, _Fun)
     {retry, rate_limited, extract_error_message(StatusMsg, Body) };
 check_http_results({ok, {{_HttpVersion, 503, StatusMsg}, _Headers, Body}}, _Fun) ->
     {retry, unavailable, extract_error_message(StatusMsg, Body) };
-%%
-%% If we indicate we want to stream the response, we'll get a ref() back
-check_http_results({ok, RequestId}, _Fun) when is_reference(RequestId) ->
-    {requestid, RequestId};
 check_http_results(Other, _Fun) ->
     {unknown, Other}.
 
