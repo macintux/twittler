@@ -205,9 +205,6 @@ twitter_urls() ->
 request_url(HttpMethod, {url, Url, UrlArgs}, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Fun) ->
     check_http_results(apply(oauth, HttpMethod, [Url, UrlArgs, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret]), Fun).
 
-request_url(HttpMethod, {url, Url, UrlArgs}, {httpc, HttpcArgs}, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Fun) ->
-    check_http_results(apply(oauth, HttpMethod, [Url, UrlArgs, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret, HttpcArgs]), Fun).
-
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
     Fun(Body);
 check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, _Headers, Body}}, _Fun) ->
