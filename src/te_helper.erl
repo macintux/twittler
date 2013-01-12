@@ -9,7 +9,7 @@
 %%% Created : 11 Dec 2012 by John Daily <jd@epep.us>
 
 -module(te_helper).
--export([timeline/3, extract_urls/1, extract_retweet/1, search/3]).
+-export([timeline/3, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3]).
 
 -export([test_timeline/0, test_search/0]).
 
@@ -77,6 +77,20 @@ extract_urls(Tweet) ->
     Entities = proplists:get_value(<<"entities">>, extract_retweet(Tweet)),
     URLs = proplists:get_value(<<"urls">>, Entities),
     [ proplists:get_value(<<"url">>, X) || X <- URLs ].
+
+%% @doc Pull mentions from a tweet. Always check for retweets
+%% Returns a list of {Name, ScreenName} pairs
+extract_mentions(Tweet) ->
+    Entities = proplists:get_value(<<"entities">>, extract_retweet(Tweet)),
+    Mentions = proplists:get_value(<<"user_mentions">>, Entities),
+    [ {proplists:get_value(<<"name">>, X), proplists:get_value(<<"screen_name">>, X)} || X <- Mentions ].
+
+%% @doc Pull author details from a tweet. Always check for retweets
+%% Returns { Name, ScreenName, Description, URL }
+author_details(Tweet) ->
+    User = proplists:get_value(<<"user">>, extract_retweet(Tweet)),
+    { proplists:get_value(<<"name">>, User), proplists:get_value(<<"screen_name">>, User),
+      proplists:get_value(<<"description">>, User), proplists:get_value(<<"url">>, User) }.
 
 %% @doc Pull embedded native retweet if present
 extract_retweet(Tweet) ->
