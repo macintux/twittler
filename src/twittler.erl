@@ -250,9 +250,9 @@ check_http_results(Other, _Fun) ->
 -spec extract_error_message(string(), string()) -> string().
 extract_error_message(HttpStatusMsg, Body) ->
     try
-        Contents = jsx:decode(list_to_binary(Body)),
-        [H | _T] = proplists:get_value(list_to_binary("errors"), Contents),
-        binary_to_list(proplists:get_value(list_to_binary("message"),
+        Contents = jsx:decode(unicode:characters_to_binary(Body)),
+        [H | _T] = proplists:get_value(unicode:characters_to_binary("errors"), Contents),
+        binary_to_list(proplists:get_value(unicode:characters_to_binary("message"),
                                            H))
     catch
         _:_ ->
@@ -264,4 +264,4 @@ extract_error_message(HttpStatusMsg, Body) ->
 parse_statuses(JSON) when is_binary(JSON) ->
     jsx:decode(JSON);
 parse_statuses(JSON) ->
-    jsx:decode(list_to_binary(JSON)).
+    jsx:decode(unicode:characters_to_binary(JSON)).
