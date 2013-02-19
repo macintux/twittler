@@ -9,7 +9,7 @@
 %%% Created : 11 Dec 2012 by John Daily <jd@epep.us>
 
 -module(te_helper).
--export([timeline/3, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3]).
+-export([timeline/3, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3, tweet_url/1, author_url/1]).
 
 -export([test_timeline/0, test_search/0]).
 
@@ -89,8 +89,10 @@ extract_mentions(Tweet) ->
 %% Returns { Name, ScreenName, Description, URL }
 author_details(Tweet) ->
     User = proplists:get_value(<<"user">>, extract_retweet(Tweet)),
-    { proplists:get_value(<<"name">>, User), proplists:get_value(<<"screen_name">>, User),
-      proplists:get_value(<<"description">>, User), proplists:get_value(<<"url">>, User) }.
+    [ {name, proplists:get_value(<<"name">>, User)},
+      {screen_name, proplists:get_value(<<"screen_name">>, User)},
+      {description, proplists:get_value(<<"description">>, User)},
+      {url, proplists:get_value(<<"url">>, User)} ].
 
 %% @doc Pull embedded native retweet if present
 extract_retweet(Tweet) ->
@@ -197,3 +199,18 @@ check_decrement([H|_T], Prev) when H > Prev ->
     fail;
 check_decrement([_H|T], Prev) ->
     check_decrement(T, Prev).
+
+%% Return the Twitter URL for a given tweet (based on screen name)
+author_twitter_url(Tweet) ->
+    RealTweet = extract_retweet(Tweet),
+    io_lib:format("~ts", [[<<"https://twitter.com/">>,
+                          proplists:get_value(<<"screen_name">>,
+                                              proplists:get_value(<<"user">>, RealTweet))]]).
+
+%% Take a tweet and determine its web link
+%% https://twitter.com/hnycombinator/status/303131874795061248
+tweet_url(Tweet) ->
+    RealTweet = extract_retweet(Tweet),
+    io_lib:format("~ts", [[author_url(RealTweet),
+                          "/status/",
+                          proplists:get_value(<<"id_str">>, RealTweet)]]).
