@@ -9,7 +9,7 @@
 %%% Created : 11 Dec 2012 by John Daily <jd@epep.us>
 
 -module(te_helper).
--export([timeline/3, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3, tweet_url/1, author_url/1]).
+-export([timeline/3, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3, tweet_url/1, author_twitter_url/1]).
 
 -export([test_timeline/0, test_search/0]).
 
@@ -200,7 +200,9 @@ check_decrement([H|_T], Prev) when H > Prev ->
 check_decrement([_H|T], Prev) ->
     check_decrement(T, Prev).
 
-%% Return the Twitter URL for a given tweet (based on screen name)
+%% Return the Twitter URL for the author of a tweet.  This is distinct
+%% from any URL the author has supplied via his/her profile, which is
+%% embedded in the tweet data itself
 author_twitter_url(Tweet) ->
     RealTweet = extract_retweet(Tweet),
     io_lib:format("~ts", [[<<"https://twitter.com/">>,
@@ -211,6 +213,6 @@ author_twitter_url(Tweet) ->
 %% https://twitter.com/hnycombinator/status/303131874795061248
 tweet_url(Tweet) ->
     RealTweet = extract_retweet(Tweet),
-    io_lib:format("~ts", [[author_url(RealTweet),
+    io_lib:format("~ts", [[author_twitter_url(RealTweet),
                           "/status/",
                           proplists:get_value(<<"id_str">>, RealTweet)]]).
