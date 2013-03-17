@@ -1,7 +1,7 @@
 %%% @author John Daily <jd@epep.us>
 %%% @copyright (C) 2013, John Daily
 %%% @doc
-%%%    Twitter 1.1 API.
+%%%    Twitter 1.1 API wrapper.
 %%% @end
 
 %% Missing:
@@ -38,6 +38,8 @@
           stream=undefined
           }).
 
+-type state() :: #state{}.
+
 -define(BASE_URL(X), "http://api.twitter.com/1.1/" ++ X).
 -define(OAUTH_URL(X), "https://api.twitter.com/oauth/" ++ X).
 -define(USER_STREAM_URL(X), "https://userstream.twitter.com/1.1/" ++ X).
@@ -53,6 +55,7 @@
 %%
 %% @spec start(ConsumerKey::string(), ConsumerSecret::string(),
 %%             AccessToken::string(), AccessTokenSecret::string()) -> Auth::auth()
+-spec dev_auth(string(), string(), string(), string()) -> auth().
 dev_auth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret) ->
     inets:start(),
     ssl:start(),
@@ -67,6 +70,7 @@ dev_auth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret) ->
 %%      should be the third argument passed to pin_auth/4
 %%
 %% @see pin_auth/4
+-spec pin_auth(string(), string()) -> { string(), string() }.
 pin_auth(ConsumerKey, ConsumerSecret) ->
     inets:start(),
     ssl:start(),
@@ -90,6 +94,7 @@ pin_auth(ConsumerKey, ConsumerSecret) ->
 %%      (string), not an integer, if it is prefaced with a 0.
 %%
 %% @see pin_auth/2
+-spec pin_auth(string(), string(), string(), string()) -> auth().
 pin_auth(ConsumerKey, ConsumerSecret, RequestToken, PIN) ->
     request_url(post,
                 { url, ?OAUTH_URL("access_token"),
@@ -112,11 +117,13 @@ pin_auth(ConsumerKey, ConsumerSecret, RequestToken, PIN) ->
 %%
 %% @spec start(Auth::auth()) -> {ok, Pid::pid()}
 
+-spec start(auth()) -> {ok, pid()}.
 start(Auth) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [Auth], []).
 
 %% @doc Fetch the specified timeline with optional arguments per the Twitter API
 
+-spec timeline(timeline(), list()) -> any().
 timeline(What, Args) ->
     gen_server:call(?SERVER, {timeline, What, Args}).
 
@@ -246,7 +253,7 @@ stream_loop(RequestId, From, LoopState) ->
             ok
     end.
 
-
+-spec twitter_call(state(), atom(), list()) -> any().
 twitter_call(State, What, UrlArgs) ->
     UrlDetails = proplists:get_value(What, State#state.urls),
     request_url(UrlDetails#url.method,
@@ -255,6 +262,7 @@ twitter_call(State, What, UrlArgs) ->
                 fun(X) -> parse_statuses(X) end
                ).
 
+-spec twitter_urls() -> list(url()).
 twitter_urls() ->
     [ { home_timeline, #url{url=?BASE_URL("statuses/home_timeline.json")} },
       { user_timeline, #url{url=?BASE_URL("statuses/user_timeline.json")} },
@@ -272,12 +280,14 @@ twitter_urls() ->
       { stream_sample, #url{url=?PUBLIC_STREAM_URL("statuses/sample.json")} }
     ].
 
+-spec request_url('get'|'post', {url, string(), list()}, auth(), fun()) -> any().
 request_url(HttpMethod, {url, Url, UrlArgs}, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Fun) ->
     check_http_results(apply(oauth, HttpMethod, [Url, UrlArgs, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret]), Fun).
 
 request_url(HttpMethod, {url, Url, UrlArgs}, {httpc, HttpcArgs}, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Fun) ->
     check_http_results(apply(oauth, HttpMethod, [Url, UrlArgs, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret, HttpcArgs]), Fun).
 
+-spec check_http_results(tuple(), fun()) -> any().
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
     Fun(Body);
 check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, _Headers, Body}}, _Fun) ->
@@ -313,11 +323,12 @@ check_http_results(Other, _Fun) ->
 %%
 %% Rather than assume that structure will remain constant, attempt to
 %% decode the JSON, but return the HTTP status header if it fails.
+-spec extract_error_message(string(), string()) -> string().
 extract_error_message(HttpStatusMsg, Body) ->
     try
-        Contents = jsx:decode(list_to_binary(Body)),
-        [H | _T] = proplists:get_value(list_to_binary("errors"), Contents),
-        binary_to_list(proplists:get_value(list_to_binary("message"),
+        Contents = jsx:decode(unicode:characters_to_binary(Body)),
+        [H | _T] = proplists:get_value(unicode:characters_to_binary("errors"), Contents),
+        binary_to_list(proplists:get_value(unicode:characters_to_binary("message"),
                                            H))
     catch
         _:_ ->
@@ -336,13 +347,14 @@ interpret_stream_message(Msg) ->
     check_for_event(proplists:get_value(<<"event">>, Msg), Msg).
 
 check_for_event(undefined, Message) ->
-    Message;
+    {message, Message};
 check_for_event(EventName, _Message) ->
-    EventName.
+    {event, EventName}.
 
 
 
+-spec parse_statuses(binary() | string()) -> any().
 parse_statuses(JSON) when is_binary(JSON) ->
     jsx:decode(JSON);
 parse_statuses(JSON) ->
-    jsx:decode(list_to_binary(JSON)).
+    jsx:decode(unicode:characters_to_binary(JSON)).

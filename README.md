@@ -5,7 +5,8 @@ Erlang Twitter API library.
 This is still very primitive (needs supervision, many functionality
 gaps remain, zero documentation) but is usable today.
 
-(However, streaming is broken.)
+For the moment I have pulled all streaming code from master, but the
+`streaming` branch will have a sorta functional implementation.
 
 ## Dependencies
 
@@ -17,9 +18,6 @@ gaps remain, zero documentation) but is usable today.
 Nothing fancy here yet. Build `jsx` and `erlang-oauth`, copy their
 beam files into this project's `ebin/` folder, and run `make` to build
 `twittler` itself.
-
-You'll see multiple warnings that I haven't yet gotten around to
-fixing.
 
 ## Running, illustrated
 
