@@ -9,6 +9,16 @@
 
 -compile(export_all).
 
+stream_tweets(R) ->
+    receive
+        {message, M} ->
+            store_tweet(M, R);
+        X ->
+            io:format("Got message ~p, discarding~n", [X])
+    end,
+    stream_tweets(R).
+
+
 stream_tweets(_R, 0) ->
     done;
 stream_tweets(R, Count) ->
@@ -32,9 +42,12 @@ store_tweet(Tweet, R) ->
 tweet_to_storage(Tweet) ->
     jsx:encode([{name, proplists:get_value(<<"name">>,
                                            proplists:get_value(<<"user">>, Tweet))},
-                {screen_name, proplists:get_value(<<"name">>,
+                {screen_name, proplists:get_value(<<"screen_name">>,
                                                   proplists:get_value(<<"user">>, Tweet))},
-                {message, proplists:get_value(<<"text">>, Tweet)}]).
+                {message, proplists:get_value(<<"text">>, Tweet)},
+                {favorite_count, proplists:get_value(<<"favorite_count">>, Tweet)},
+                {retweet_count, proplists:get_value(<<"retweet_count">>, Tweet)}
+               ]).
 
 add_indexes(Tweet, Object) ->
     riakc_obj:update_metadata(Object,
