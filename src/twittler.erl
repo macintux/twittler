@@ -359,6 +359,6 @@ check_for_event(EventName, _Message) ->
 
 -spec parse_statuses(binary() | string()) -> any().
 parse_statuses(JSON) when is_binary(JSON) ->
-    jsx:decode(JSON);
+    jsx:decode(JSON, [{labels, atom}]);
 parse_statuses(JSON) ->
-    jsx:decode(unicode:characters_to_binary(JSON)).
+    jsx:decode(unicode:characters_to_binary(JSON, [{labels, atom}]);

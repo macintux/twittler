@@ -37,7 +37,7 @@ search(Query, {count, X}, Fun) when X > ?MAX_SEARCH_REQ ->
         unified(X, ?MAX_SEARCH_REQ, [], [],
             #state{'query' = Query,
                    api_call = fun twittler:search/2,
-                   results_parser = fun(Y) -> proplists:get_value(<<"statuses">>, Y) end,
+                   results_parser = fun(Y) -> proplists:get_value(statuses, Y) end,
                    per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ];
 search(Query, {count, X}, Fun) ->
@@ -45,7 +45,7 @@ search(Query, {count, X}, Fun) ->
         unified(X, X, [], [],
             #state{'query' = Query,
                    api_call = fun twittler:search/2,
-                   results_parser = fun(Y) -> proplists:get_value(<<"statuses">>, Y) end,
+                   results_parser = fun(Y) -> proplists:get_value(statuses, Y) end,
                    per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
 
@@ -89,31 +89,31 @@ timeline(Which, {count, X}, Fun) ->
 
 
 find_id(Tweet) ->
-    proplists:get_value(<<"id">>, Tweet).
+    proplists:get_value(id, Tweet).
 
 %% @doc Pull embedded URLs from a tweet. Always check for retweets
 extract_urls(Tweet) ->
-    Entities = proplists:get_value(<<"entities">>, extract_retweet(Tweet)),
-    URLs = proplists:get_value(<<"urls">>, Entities),
-    [ proplists:get_value(<<"url">>, X) || X <- URLs ].
+    Entities = proplists:get_value(entities, extract_retweet(Tweet)),
+    URLs = proplists:get_value(urls, Entities),
+    [ proplists:get_value(url, X) || X <- URLs ].
 
 %% @doc Pull mentions from a tweet. Always check for retweets
 %% Returns a list of {Name, ScreenName} pairs
 extract_mentions(Tweet) ->
-    Entities = proplists:get_value(<<"entities">>, extract_retweet(Tweet)),
-    Mentions = proplists:get_value(<<"user_mentions">>, Entities),
-    [ {proplists:get_value(<<"name">>, X), proplists:get_value(<<"screen_name">>, X)} || X <- Mentions ].
+    Entities = proplists:get_value(entities, extract_retweet(Tweet)),
+    Mentions = proplists:get_value(user_mentions, Entities),
+    [ {proplists:get_value(name, X), proplists:get_value(screen_name, X)} || X <- Mentions ].
 
 %% @doc Pull author details from a tweet. Always check for retweets
 %% Returns { Name, ScreenName, Description, URL }
 author_details(Tweet) ->
-    User = proplists:get_value(<<"user">>, extract_retweet(Tweet)),
-    { proplists:get_value(<<"name">>, User), proplists:get_value(<<"screen_name">>, User),
-      proplists:get_value(<<"description">>, User), proplists:get_value(<<"url">>, User) }.
+    User = proplists:get_value(user, extract_retweet(Tweet)),
+    { proplists:get_value(name, User), proplists:get_value(screen_name, User),
+      proplists:get_value(description, User), proplists:get_value(url, User) }.
 
 %% @doc Pull embedded native retweet if present
 extract_retweet(Tweet) ->
-    extract_retweet(Tweet, proplists:get_value(<<"retweeted_status">>, Tweet)).
+    extract_retweet(Tweet, proplists:get_value(retweeted_status, Tweet)).
 
 extract_retweet(Tweet, undefined) ->
     Tweet;
@@ -189,13 +189,13 @@ process_latest(Latest, Accum, State) ->
 
 %%%%%% Test suite, should make eunit-compatible
 test_timeline() ->
-    ResultSet = timeline(user, {count, ?MAX_TL_REQ * 2 + 3}, fun(X) -> proplists:get_value(<<"id">>, X) end),
+    ResultSet = timeline(user, {count, ?MAX_TL_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
     MaxId = proplists:get_value(max_id, ResultSet),
     MinId = proplists:get_value(min_id, ResultSet),
     {MaxId, MinId, ?MAX_TL_REQ * 2 + 3} = process_test_list(proplists:get_value(tweets, ResultSet)).
 
 test_search() ->
-    ResultSet = search("java", {count, ?MAX_SEARCH_REQ * 2 + 3}, fun(X) -> proplists:get_value(<<"id">>, X) end),
+    ResultSet = search("java", {count, ?MAX_SEARCH_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
     MaxId = proplists:get_value(max_id, ResultSet),
     MinId = proplists:get_value(min_id, ResultSet),
     {MaxId, MinId, ?MAX_SEARCH_REQ * 2 + 3} = process_test_list(proplists:get_value(tweets, ResultSet)).

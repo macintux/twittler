@@ -33,20 +33,20 @@ stream_tweets(R, Count) ->
 
 store_tweet(Tweet, R) ->
     Bucket = <<"tweets">>,
-    Key = proplists:get_value(<<"id_str">>, Tweet),
+    Key = proplists:get_value(id_str, Tweet),
     JSON = tweet_to_storage(Tweet),
     Object = create_object(Bucket, Key, JSON),
     MDObject = add_indexes(Tweet, Object),
     put_object(add_indexes(Tweet, MDObject), R).
 
 tweet_to_storage(Tweet) ->
-    jsx:encode([{name, proplists:get_value(<<"name">>,
-                                           proplists:get_value(<<"user">>, Tweet))},
-                {screen_name, proplists:get_value(<<"screen_name">>,
-                                                  proplists:get_value(<<"user">>, Tweet))},
-                {message, proplists:get_value(<<"text">>, Tweet)},
-                {favorite_count, proplists:get_value(<<"favorite_count">>, Tweet)},
-                {retweet_count, proplists:get_value(<<"retweet_count">>, Tweet)}
+    jsx:encode([{name, proplists:get_value(name,
+                                           proplists:get_value(user, Tweet))},
+                {screen_name, proplists:get_value(screen_name,
+                                                  proplists:get_value(user, Tweet))},
+                {message, proplists:get_value(text, Tweet)},
+                {favorite_count, proplists:get_value(favorite_count, Tweet)},
+                {retweet_count, proplists:get_value(retweet_count, Tweet)}
                ]).
 
 add_indexes(Tweet, Object) ->
@@ -56,17 +56,17 @@ add_indexes(Tweet, Object) ->
 
 indexes(Tweet) ->
     [
-     {{integer_index, "id"}, [proplists:get_value(<<"id">>, Tweet)]},
-     {{binary_index, "screen_name"}, [proplists:get_value(<<"screen_name">>,
-                                                          proplists:get_value(<<"user">>, Tweet))]},
+     {{integer_index, "id"}, [proplists:get_value(id, Tweet)]},
+     {{binary_index, "screen_name"}, [proplists:get_value(screen_name,
+                                                          proplists:get_value(user, Tweet))]},
      {{binary_index, "hashtags"}, pull_hashtags(Tweet)},
-     {{binary_index, "created"}, [proplists:get_value(<<"created_at">>, Tweet)]}
+     {{binary_index, "created"}, [proplists:get_value(created_at, Tweet)]}
     ].
 
 pull_hashtags(Tweet) ->
-    lists:map(fun(X) -> proplists:get_value(<<"text">>, X) end,
-              proplists:get_value(<<"hashtags">>,
-                                  proplists:get_value(<<"entities">>, Tweet))).
+    lists:map(fun(X) -> proplists:get_value(text, X) end,
+              proplists:get_value(hashtags,
+                                  proplists:get_value(entities, Tweet))).
 
 
 %% Each index gets added and a new object returned for the next index
