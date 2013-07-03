@@ -134,7 +134,7 @@ status(Id) ->
 status(Id, retweets) ->
     gen_server:call(?SERVER, {status, retweets, Id});
 status(Id, oembed) ->
-    gen_server:call(?SERVER, {status, oembed, Id}).
+    gen_server:call(?SERVER, {status, oembed, Id, [{omit_script, "true"}] }).
 
 search(Query) ->
     gen_server:call(?SERVER, {search, Query, []}).
@@ -191,6 +191,8 @@ handle_call(whoami, _From, State) ->
     {reply, State#state.user, State};
 handle_call({status, What, Id}, _From, State) ->
     {reply, twitter_call(State, list_to_atom("status_" ++ atom_to_list(What)), [ { id, Id } ]), State};
+handle_call({status, What, Id, Args}, _From, State) ->
+    {reply, twitter_call(State, list_to_atom("status_" ++ atom_to_list(What)), [ { id, Id } ] ++ Args), State};
 handle_call({search, Query, Args}, _From, State) ->
     {reply, twitter_call(State, search, [{ q, Query }] ++ Args), State}.
 
@@ -282,9 +284,11 @@ twitter_urls() ->
 
 -spec request_url('get'|'post', {url, string(), list()}, auth(), fun()) -> any().
 request_url(HttpMethod, {url, Url, UrlArgs}, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Fun) ->
+    io:format("Url: ~ts, Args: ~p~n", [Url, UrlArgs]),
     check_http_results(apply(oauth, HttpMethod, [Url, UrlArgs, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret]), Fun).
 
 request_url(HttpMethod, {url, Url, UrlArgs}, {httpc, HttpcArgs}, #auth{ckey=ConsumerKey, csecret=ConsumerSecret, method=Method, atoken=AccessToken, asecret=AccessSecret}, Fun) ->
+    io:format("Url: ~ts, Args: ~p~n", [Url, UrlArgs]),
     check_http_results(apply(oauth, HttpMethod, [Url, UrlArgs, {ConsumerKey, ConsumerSecret, Method}, AccessToken, AccessSecret, HttpcArgs]), Fun).
 
 -spec check_http_results(tuple(), fun()) -> any().
