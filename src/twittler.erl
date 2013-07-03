@@ -134,13 +134,14 @@ status(Id) ->
 status(Id, retweets) ->
     gen_server:call(?SERVER, {status, retweets, Id});
 status(Id, oembed) ->
-    gen_server:call(?SERVER, {status, oembed, Id, [{omit_script, "true"}] }).
+    timer:sleep(500), %% Self-throttle
+    gen_server:call(?SERVER, {status, oembed, Id, [{omit_script, "true"}] }, 30000).
 
 search(Query) ->
-    gen_server:call(?SERVER, {search, Query, []}).
+    gen_server:call(?SERVER, {search, Query, [{result_type, "recent"}]}).
 
 search(Query, Args) ->
-    gen_server:call(?SERVER, {search, Query, Args}).
+    gen_server:call(?SERVER, {search, Query, Args ++ [{result_type, "recent"}]}).
 
 %% Sample ArgList: [ "erlang", "rabbitmq" ]
 
@@ -361,4 +362,4 @@ check_for_event(EventName, _Message) ->
 parse_statuses(JSON) when is_binary(JSON) ->
     jsx:decode(JSON, [{labels, atom}]);
 parse_statuses(JSON) ->
-    jsx:decode(unicode:characters_to_binary(JSON, [{labels, atom}]);
+    jsx:decode(unicode:characters_to_binary(JSON), [{labels, atom}]).

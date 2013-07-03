@@ -11,6 +11,8 @@
 -module(te_helper).
 -export([timeline/3, timeline/4, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3]).
 
+-export([oembed_search/2, is_retweet/1]).
+
 -export([test_timeline/0, test_search/0]).
 
 -define(MAX_TL_REQ, 200).
@@ -120,6 +122,8 @@ extract_retweet(Tweet, undefined) ->
 extract_retweet(_Tweet, Retweet) ->
     Retweet.
 
+is_retweet(Tweet) ->
+    proplists:get_value(retweeted_status, Tweet) =:= undefined.
 
 %% Consolidate timeline, search
 %% unified() returns { State, List }
@@ -216,3 +220,21 @@ check_decrement([H|_T], Prev) when H > Prev ->
     fail;
 check_decrement([_H|T], Prev) ->
     check_decrement(T, Prev).
+
+oembed_search(Search, Filename) ->
+    {ok, FH} = file:open(Filename, [write, {encoding, utf8}]),
+    search(Search, {count, 500},
+           fun(X) -> io:fwrite(FH, "~ts~n",
+                               [ case is_retweet(X) of
+                                     true ->
+                                         "";
+                                     false ->
+                                         proplists:get_value(html,
+                                                     twittler:status(
+                                                       binary_to_list(
+                                                         proplists:get_value(id_str, X)),
+                                                       oembed))
+                                 end
+                               ]
+                              ) end),
+    file:close(FH).
