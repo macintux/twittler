@@ -9,7 +9,7 @@
 %%% Created : 11 Dec 2012 by John Daily <jd@epep.us>
 
 -module(te_helper).
--export([timeline/3, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3]).
+-export([timeline/3, timeline/4, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3]).
 
 -export([test_timeline/0, test_search/0]).
 
@@ -49,6 +49,25 @@ search(Query, {count, X}, Fun) ->
                    per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
 
+
+timeline(user, {screen_name, Who}, {count, X}, Fun) when X > ?MAX_TL_REQ ->
+    {State, List} =
+        unified(X, ?MAX_TL_REQ, [], [],
+            #state{'query' = user,
+                   args = [{screen_name, Who}],
+                   api_call = fun twittler:timeline/2,
+                   results_parser = fun(Y) -> Y end,
+                   per_msg_fun = Fun}),
+    [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ];
+timeline(user, {screen_name, Who}, {count, X}, Fun) ->
+    {State, List} =
+        unified(X, X, [], [],
+            #state{'query' = user,
+                   args = [{screen_name, Who}],
+                   api_call = fun twittler:timeline/2,
+                   results_parser = fun(Y) -> Y end,
+                   per_msg_fun = Fun}),
+    [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
 
 timeline(Which, {count, X}, Fun) when X > ?MAX_TL_REQ ->
     {State, List} =
