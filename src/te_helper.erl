@@ -10,8 +10,9 @@
 
 -module(te_helper).
 -export([timeline/3, timeline/4, extract_urls/1, extract_mentions/1, extract_retweet/1, author_details/1, search/3]).
+-export([follow/1]).
 
--export([oembed_search/2, is_retweet/1]).
+-export([oembed_tweets/2, is_retweet/1]).
 
 -export([test_timeline/0, test_search/0]).
 
@@ -27,67 +28,87 @@
           api_call, %% twittler:timeline or twittler:search
           results_parser, %% search and timeline return different types of lists
           per_msg_fun, %% Client-provided function to run against each message
+          max_per_request, %% Twitter's max request counter for this type of
+                           %% request (see -defines above)
           max_id=0, %% First message we encounter
           min_id=0, %% Last message we encounter
           args=[] %% Arguments to pass, not including count, max_id
          }).
 
+-type state() :: #state{}.
+
+%% Account management foo
+
+
+%% Utility function to invoke from strip_at
+grab_re(Orig, nomatch) ->
+    Orig;
+grab_re(_Orig, {match, List}) ->
+    lists:nth(1, List).
+
+strip_at(Screenname) ->
+    grab_re(Screenname, re:run(Screenname, "^\s*@(.*)\s*", [{capture, all_but_first, list}])).
+
+%% For moment, assumes list of @<usernames>
+follow(List) ->
+    lists:foreach(fun(X) -> io:format("~p~n", [twittler:follow({screen_name, strip_at(X)})]) end,
+                  List).
+
+
+%% @doc Check for the presence of next_results in the search_metadata
+%% return from the previous search request
+-spec check_next_search(term()) -> boolean().
+check_next_search(undefined) ->
+    false;
+check_next_search(_) ->
+    true.
+
 %% @doc Take the specified search, return the specified number of
 %% messages as processed by Fun
-search(Query, {count, X}, Fun) when X > ?MAX_SEARCH_REQ ->
-    {State, List} =
-        unified(X, ?MAX_SEARCH_REQ, [], [],
-            #state{'query' = Query,
-                   api_call = fun twittler:search/2,
-                   results_parser = fun(Y) -> proplists:get_value(statuses, Y) end,
-                   per_msg_fun = Fun}),
-    [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ];
 search(Query, {count, X}, Fun) ->
     {State, List} =
-        unified(X, X, [], [],
-            #state{'query' = Query,
-                   api_call = fun twittler:search/2,
-                   results_parser = fun(Y) -> proplists:get_value(statuses, Y) end,
-                   per_msg_fun = Fun}),
+        unified(X,
+                #state{'query' = Query,
+                       api_call = fun twittler:search/2,
+                       max_per_request = ?MAX_SEARCH_REQ,
+                       results_parser = fun(_Qty, Y) ->
+                                                { check_next_search(proplists:get_value(next_results,
+                                                                                        proplists:get_value(search_metadata, Y))),
+                                                  proplists:get_value(statuses, Y)
+                                                }
+                                        end,
+                       per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
 
 
-timeline(user, {screen_name, Who}, {count, X}, Fun) when X > ?MAX_TL_REQ ->
-    {State, List} =
-        unified(X, ?MAX_TL_REQ, [], [],
-            #state{'query' = user,
-                   args = [{screen_name, Who}],
-                   api_call = fun twittler:timeline/2,
-                   results_parser = fun(Y) -> Y end,
-                   per_msg_fun = Fun}),
-    [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ];
 timeline(user, {screen_name, Who}, {count, X}, Fun) ->
     {State, List} =
-        unified(X, X, [], [],
-            #state{'query' = user,
-                   args = [{screen_name, Who}],
-                   api_call = fun twittler:timeline/2,
-                   results_parser = fun(Y) -> Y end,
-                   per_msg_fun = Fun}),
+        unified(X,
+                #state{'query' = user,
+                       args = [{screen_name, Who}],
+                       max_per_request = ?MAX_TL_REQ,
+                       api_call = fun twittler:timeline/2,
+                       results_parser = fun(Qty, Y) ->
+                                                { Qty > length(Y),
+                                                  Y
+                                                }
+                                        end,
+                       per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
 
-timeline(Which, {count, X}, Fun) when X > ?MAX_TL_REQ ->
-    {State, List} =
-        unified(X, ?MAX_TL_REQ, [], [],
-            #state{'query' = Which,
-                   api_call = fun twittler:timeline/2,
-                   results_parser = fun(Y) -> Y end,
-                   per_msg_fun = Fun}),
-    [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ];
 timeline(Which, {count, X}, Fun) ->
     {State, List} =
-        unified(X, X, [], [],
-            #state{'query' = Which,
-                   api_call = fun twittler:timeline/2,
-                   results_parser = fun(Y) -> Y end,
-                   per_msg_fun = Fun}),
+        unified(X,
+                #state{'query' = Which,
+                       api_call = fun twittler:timeline/2,
+                       max_per_request = ?MAX_TL_REQ,
+                       results_parser = fun(Qty, Y) ->
+                                                { Qty > length(Y),
+                                                  Y
+                                                }
+                                        end,
+                       per_msg_fun = Fun}),
     [ {max_id, State#state.max_id}, {min_id, State#state.min_id}, {tweets, List} ].
-
 
 
 find_id(Tweet) ->
@@ -123,40 +144,43 @@ extract_retweet(_Tweet, Retweet) ->
     Retweet.
 
 is_retweet(Tweet) ->
-    proplists:get_value(retweeted_status, Tweet) =:= undefined.
+    proplists:get_value(retweeted_status, Tweet) =/= undefined.
 
 %% Consolidate timeline, search
 %% unified() returns { State, List }
 
 %% Entry point
-unified(Remaining, Requested, [], [], State) ->
-    Tweets = do_call(Requested, State),
+unified(HowMany, State) ->
+    unified(true, HowMany, [], [], State).
+
+%% First invocation of unified/5
+unified(true, Remaining, [], [], State) ->
+    {Continue, Tweets} =
+        do_call(min(State#state.max_per_request, Remaining), State),
     FirstId = find_id(lists:nth(1, Tweets)),
-    unified(Remaining - Requested, Requested, Tweets, [],
+    unified(Continue, Remaining - length(Tweets), Tweets, [],
             State#state{max_id=FirstId});
 
-%% Asked for more than we received, stop.
-unified(_Remaining, Requested, Latest, Accum, State) when Requested > length(Latest) ->
+%% One ending point: we've gotten all that the client asked for
+unified(true, Remaining, Latest, Accum, State) when Remaining =< 0 ->
     process_latest(Latest, Accum, State);
 
-%% Typical ending point, no more to ask for.
-unified(Remaining, _Requested, Latest, Accum, State) when Remaining =< 0 ->
+%% Other ending point: the results_parser function told us to stop
+unified(false, _Remaining, Latest, Accum, State) ->
     process_latest(Latest, Accum, State);
 
-%% Last batch. Ask only for the remainder, not the max count
-unified(Remaining, Requested, Latest, Accum, State) when Remaining =< Requested ->
+%% Intermediate invocation
+unified(true, Remaining, Latest, Accum, State) ->
     {NewState, NewAccum} = process_latest(Latest, Accum, State),
-    unified(0, Remaining,
-            do_call(Remaining, NewState), NewAccum, NewState);
-
-%% Intermediate invocation when count > Twitter max allowed
-unified(Remaining, Requested, Latest, Accum, State) ->
-    {NewState, NewAccum} = process_latest(Latest, Accum, State),
-    unified(Remaining - Requested, Requested,
-            do_call(Requested, NewState),
+    {Continue, Tweets} =
+        do_call(min(State#state.max_per_request, Remaining),
+                NewState),
+    unified(Continue,
+            Remaining - length(Tweets),
+            Tweets,
             NewAccum, NewState).
 
-
+-spec do_call(integer(), state()) -> { boolean(), list(list()) }.
 do_call(NextQty, State) ->
     do_call(NextQty, State, State#state.min_id).
 
@@ -164,10 +188,11 @@ do_call(NextQty, State) ->
 %% tweet Twitter will give us.
 do_call(Qty, State, 0) ->
     apply(State#state.results_parser,
-          [ apply(State#state.api_call,
-                [State#state.'query',
-                 State#state.args ++
-                     [{count, Qty}]])
+          [ Qty,
+            apply(State#state.api_call,
+                  [State#state.'query',
+                   State#state.args ++
+                       [{count, Qty}]])
           ]
          );
 %% If we do have a minimum ID from previous timeline/search
@@ -175,11 +200,12 @@ do_call(Qty, State, 0) ->
 %% give us the second time around
 do_call(Qty, State, MinId) ->
     apply(State#state.results_parser,
-          [ apply(State#state.api_call,
-                [State#state.'query',
-                 State#state.args ++
-                     [{count, Qty},
-                      {max_id, MinId - 1}]])
+          [ Qty,
+            apply(State#state.api_call,
+                  [State#state.'query',
+                   State#state.args ++
+                       [{count, Qty},
+                        {max_id, MinId - 1}]])
           ]
           ).
 
@@ -221,20 +247,27 @@ check_decrement([H|_T], Prev) when H > Prev ->
 check_decrement([_H|T], Prev) ->
     check_decrement(T, Prev).
 
-oembed_search(Search, Filename) ->
+oembed_header(FH) ->
+    io:fwrite(FH, "<html>~n<head><meta charset='utf-8'></head><body><script src='http://platform.twitter.com/widgets.js' charset='utf-8'></script>~n", []).
+
+oembed_tweets(Tweets, Filename) ->
     {ok, FH} = file:open(Filename, [write, {encoding, utf8}]),
-    search(Search, {count, 500},
-           fun(X) -> io:fwrite(FH, "~ts~n",
-                               [ case is_retweet(X) of
-                                     true ->
-                                         "";
-                                     false ->
-                                         proplists:get_value(html,
-                                                     twittler:status(
-                                                       binary_to_list(
-                                                         proplists:get_value(id_str, X)),
-                                                       oembed))
-                                 end
-                               ]
-                              ) end),
+    oembed_header(FH),
+    lists:foreach(
+      fun(X) -> io:fwrite(FH, "~ts~n",
+                          [ case is_retweet(X) of
+                                true ->
+                                    "";
+                                false ->
+                                    proplists:get_value(html,
+                                                        twittler:status(
+                                                          binary_to_list(
+                                                            proplists:get_value(id_str, X)),
+                                                          oembed))
+                            end
+                          ]
+                         )
+      end,
+      Tweets),
+    io:fwrite(FH, "</body></html>~n", []),
     file:close(FH).

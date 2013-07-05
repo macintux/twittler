@@ -15,7 +15,8 @@
 
 %% Our API
 -export([dev_auth/4, pin_auth/2, pin_auth/4, start/1, timeline/2,
-         status/1, status/2, stop/0, search/1, search/2, stream/1, stream/2]).
+         status/1, status/2, stop/0, search/1, search/2, stream/1, stream/2,
+         follow/1, rate_status/0]).
 
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -128,13 +129,17 @@ timeline(What, Args) ->
     gen_server:call(?SERVER, {timeline, What, Args}).
 
 
+rate_status() ->
+    gen_server:call(?SERVER, rate_status).
+
 status(Id) ->
     gen_server:call(?SERVER, {status, show, Id}).
 
 status(Id, retweets) ->
     gen_server:call(?SERVER, {status, retweets, Id});
 status(Id, oembed) ->
-    timer:sleep(500), %% Self-throttle
+    %% Limit is 1 every 5 seconds (180 requests/15 minutes)
+    timer:sleep(6000), %% Self-throttle. Need something smarter (or just write my own oembed logic)
     gen_server:call(?SERVER, {status, oembed, Id, [{omit_script, "true"}] }, 30000).
 
 search(Query) ->
@@ -142,6 +147,12 @@ search(Query) ->
 
 search(Query, Args) ->
     gen_server:call(?SERVER, {search, Query, Args ++ [{result_type, "recent"}]}).
+
+%% IDType is one of: user_id or screen_name
+%% ID will be numeric (for user_id) or text (@<screen_name>, minus the @)
+%% te_helper should strip any leading @
+follow({IDType, ID}) ->
+    gen_server:call(?SERVER, {follow, [{IDType, ID}]}).
 
 %% Sample ArgList: [ "erlang", "rabbitmq" ]
 
@@ -195,7 +206,12 @@ handle_call({status, What, Id}, _From, State) ->
 handle_call({status, What, Id, Args}, _From, State) ->
     {reply, twitter_call(State, list_to_atom("status_" ++ atom_to_list(What)), [ { id, Id } ] ++ Args), State};
 handle_call({search, Query, Args}, _From, State) ->
-    {reply, twitter_call(State, search, [{ q, Query }] ++ Args), State}.
+    {reply, twitter_call(State, search, [{ q, Query }] ++ Args), State};
+handle_call(rate_status, _From, State) ->
+    {reply, twitter_call(State, rate_status, []), State};
+handle_call({follow, Args}, _From, State) ->
+    {reply, twitter_call(State, follow, Args), State}.
+
 
 
 
@@ -280,7 +296,9 @@ twitter_urls() ->
       { search, #url{url=?BASE_URL("search/tweets.json")} },
       { stream_filter, #url{url=?PUBLIC_STREAM_URL("statuses/filter.json"), method=post} },
       { stream_user, #url{url=?USER_STREAM_URL("user.json")} },
-      { stream_sample, #url{url=?PUBLIC_STREAM_URL("statuses/sample.json")} }
+      { stream_sample, #url{url=?PUBLIC_STREAM_URL("statuses/sample.json")} },
+      { rate_status, #url{url=?BASE_URL("application/rate_limit_status.json")} },
+      { follow, #url{url=?BASE_URL("friendships/create.json"), method=post} }
     ].
 
 -spec request_url('get'|'post', {url, string(), list()}, auth(), fun()) -> any().
@@ -295,7 +313,7 @@ request_url(HttpMethod, {url, Url, UrlArgs}, {httpc, HttpcArgs}, #auth{ckey=Cons
 -spec check_http_results(tuple(), fun()) -> any().
 check_http_results({ok, {{_HttpVersion, 200, _StatusMsg}, _Headers, Body}}, Fun) ->
     Fun(Body);
-check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, _Headers, Body}}, _Fun) ->
+check_http_results({ok, {{_HttpVersion, 401, StatusMsg}, Headers, Body}}, _Fun) ->
     {oauth_error, extract_error_message(StatusMsg, Body) };
 check_http_results({ok, {{_HttpVersion, 403, StatusMsg}, _Headers, Body}}, _Fun) ->
     {forbidden, extract_error_message(StatusMsg, Body) };
