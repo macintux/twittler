@@ -16,9 +16,7 @@ Nothing fancy here yet. Build `jsx` and `erlang-oauth`, copy their
 beam files into this project's `ebin/` folder, and run `make` to build
 `twittler` itself.
 
-## Running, illustrated
-
-<div class="info">
+## Important note regarding illustrations
 The examples below are out of date.  The most notable change is that
 the `jsx` library has been instructed to convert proplist keys to atoms
 instead of leaving them as binary. This is a bit of a security risk for
@@ -27,8 +25,8 @@ virtual machine's supply of atoms, but is fine for futzing around.
 
 I have a plan to address this when it becomes important: see
 https://github.com/talentdeficit/jsx/pull/37
-</div>
 
+## Running, illustrated
 
 There is no support for unauthenticated API calls so you'll need a
 consumer key and secret, which can be obtained free of charge from
