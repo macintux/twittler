@@ -5,9 +5,6 @@ Erlang Twitter API library.
 This is still very primitive (needs supervision, many functionality
 gaps remain, zero documentation) but is usable today.
 
-For the moment I have pulled all streaming code from master, but the
-`streaming` branch will have a sorta functional implementation.
-
 ## Dependencies
 
 * OAuth: [erlang-oauth](https://github.com/tim/erlang-oauth)
@@ -18,6 +15,16 @@ For the moment I have pulled all streaming code from master, but the
 Nothing fancy here yet. Build `jsx` and `erlang-oauth`, copy their
 beam files into this project's `ebin/` folder, and run `make` to build
 `twittler` itself.
+
+## Important note regarding illustrations
+The examples below are out of date.  The most notable change is that
+the `jsx` library has been instructed to convert proplist keys to atoms
+instead of leaving them as binary. This is a bit of a security risk for
+any long-running application, because it's possible to exhaust the
+virtual machine's supply of atoms, but is fine for futzing around.
+
+I have a plan to address this when it becomes important: see
+https://github.com/talentdeficit/jsx/pull/37
 
 ## Running, illustrated
 
