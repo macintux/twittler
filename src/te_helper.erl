@@ -14,6 +14,8 @@
 
 -export([oembed_tweets/2, is_retweet/1]).
 
+-export([list_network/2]).
+
 -export([test_timeline/0, test_search/0]).
 
 -define(MAX_TL_REQ, 200).
@@ -54,14 +56,34 @@ follow(List) ->
     lists:foreach(fun(X) -> io:format("~p~n", [twittler:follow({screen_name, strip_at(X)})]) end,
                   List).
 
-
-%% @doc Check for the presence of next_results in the search_metadata
-%% return from the previous search request
--spec check_next_search(term()) -> boolean().
-check_next_search(undefined) ->
+%% @doc Helper function to check for the presence of next_results in
+%% the search_metadata (or next_cursor in friends/followers) in the
+%% return value from the latest set of results
+-spec check_for_cursor(term()) -> boolean().
+check_for_cursor(undefined) ->
     false;
-check_next_search(_) ->
+check_for_cursor(_) ->
     true.
+
+%% Who: friends or followers
+%% Args: Twitter API parameters as list of key/value tuples
+list_network(Who, Args) ->
+    list_network(Who, Args, -1).
+
+list_network(Who, Args, Cursor) ->
+    chase_network(Who, Args, twittler:network(Who, Args ++ [{cursor, Cursor}]), []).
+
+chase_network(Who, Args, Results, Accum) ->
+    keep_chasing_network(Who, Args, proplists:get_value(next_cursor, Results),
+                         proplists:get_value(users, Results, []), Accum).
+
+keep_chasing_network(_Who, _Args, _Cursor, [], Accum) ->
+    Accum;
+keep_chasing_network(_Who, _Args, undefined, Users, Accum) ->
+    Accum ++ Users;
+keep_chasing_network(Who, Args, Cursor, Users, Accum) ->
+    chase_network(Who, Args,
+                  twittler:network(Who, Args ++ [{cursor, Cursor}]), Accum ++ Users).
 
 %% @doc Take the specified search, return the specified number of
 %% messages as processed by Fun
@@ -72,8 +94,8 @@ search(Query, {count, X}, Fun) ->
                        api_call = fun twittler:search/2,
                        max_per_request = ?MAX_SEARCH_REQ,
                        results_parser = fun(_Qty, Y) ->
-                                                { check_next_search(proplists:get_value(next_results,
-                                                                                        proplists:get_value(search_metadata, Y))),
+                                                { check_for_cursor(proplists:get_value(next_results,
+                                                                                       proplists:get_value(search_metadata, Y))),
                                                   proplists:get_value(statuses, Y)
                                                 }
                                         end,

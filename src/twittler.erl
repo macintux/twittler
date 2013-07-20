@@ -16,7 +16,7 @@
 %% Our API
 -export([dev_auth/4, pin_auth/2, pin_auth/4, start/1, timeline/2,
          status/1, status/2, stop/0, search/1, search/2, stream/1, stream/2,
-         follow/1, rate_status/0]).
+         follow/1, rate_status/0, network/2]).
 
 %% gen_server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -142,6 +142,10 @@ status(Id, oembed) ->
     timer:sleep(6000), %% Self-throttle. Need something smarter (or just write my own oembed logic)
     gen_server:call(?SERVER, {status, oembed, Id, [{omit_script, "true"}] }, 30000).
 
+network(Which, Args) ->
+    timer:sleep(61000), %% Self-throttle. Need something smarter
+    gen_server:call(?SERVER, {network, Which, Args}).
+
 search(Query) ->
     gen_server:call(?SERVER, {search, Query, [{result_type, "recent"}]}).
 
@@ -196,6 +200,9 @@ handle_call({stream, user, Params}, {FromPid, _Tag}, State) ->
 handle_call({stream, sample, Params}, {FromPid, _Tag}, State) ->
     StreamPid = twitter_stream(State, stream_sample, Params, FromPid),
     {reply, ok, State#state{stream=StreamPid}};
+
+handle_call({network, Which, Args}, _From, State) ->
+    {reply, twitter_call(State, list_to_atom("list_" ++ atom_to_list(Which)), Args), State};
 
 handle_call({timeline, What, Args}, _From, State) ->
     {reply, twitter_call(State, list_to_atom(atom_to_list(What) ++ "_timeline"), Args), State};
@@ -287,6 +294,9 @@ twitter_urls() ->
       { user_timeline, #url{url=?BASE_URL("statuses/user_timeline.json")} },
       { mentions_timeline, #url{url=?BASE_URL("statuses/mentions_timeline.json")} },
       { retweets_of_me_timeline, #url{url=?BASE_URL("statuses/retweets_of_me.json")} },
+
+      { list_friends, #url{url=?BASE_URL("friends/list.json"), result=user} },
+      { list_followers, #url{url=?BASE_URL("followers/list.json"), result=user} },
 
       { verify_creds, #url{url=?BASE_URL("account/verify_credentials.json"), result=user} },
 
