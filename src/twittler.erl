@@ -368,16 +368,16 @@ extract_error_message(HttpStatusMsg, Body) ->
             HttpStatusMsg
     end.
 
-interpret_stream_message([{<<"friends">>, FriendsList}]) ->
+interpret_stream_message([{friends, FriendsList}]) ->
     "I see your friends";
-interpret_stream_message([{<<"delete">>, TweetId}]) ->
+interpret_stream_message([{delete, TweetId}]) ->
     "Deleted tweet in timeline";
-interpret_stream_message([{<<"scrub_geo">>, TweetRangeAsList}]) ->
+interpret_stream_message([{scrub_geo, TweetRangeAsList}]) ->
     "Deleted location in timeline";
-interpret_stream_message([{<<"limit">>, Missed}]) ->
+interpret_stream_message([{limit, Missed}]) ->
     io_lib:format("Skipped ~p tweets due to rate limiting", [ Missed ]); %% Missed is probably {track, Count}
 interpret_stream_message(Msg) ->
-    check_for_event(proplists:get_value(<<"event">>, Msg), Msg).
+    check_for_event(proplists:get_value(event, Msg), Msg).
 
 check_for_event(undefined, Message) ->
     {message, Message};
