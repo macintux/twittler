@@ -16,7 +16,7 @@
 
 -export([list_network/2]).
 
--export([test_timeline/0, test_search/0]).
+-export([run_tests/0, test_timeline/0, test_search/0]).
 
 -define(MAX_TL_REQ, 200).
 -define(MAX_SEARCH_REQ, 100).
@@ -240,6 +240,10 @@ process_latest(Latest, Accum, State) ->
                    lists:map(State#state.per_msg_fun, Latest)) }.
 
 %%%%%% Test suite, should make eunit-compatible
+run_tests() ->
+    test_timeline(),
+    test_search().
+
 test_timeline() ->
     ResultSet = timeline(user, {count, ?MAX_TL_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
     MaxId = proplists:get_value(max_id, ResultSet),
