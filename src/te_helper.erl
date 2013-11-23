@@ -16,7 +16,7 @@
 
 -export([list_network/2]).
 
--export([run_tests/0, test_timeline/0, test_search/0]).
+-export([run_tests/0, test_timelines/0, test_search/0]).
 
 -define(MAX_TL_REQ, 200).
 -define(MAX_SEARCH_REQ, 100).
@@ -125,7 +125,7 @@ timeline(Which, {count, X}, Fun) ->
                        api_call = fun twittler:timeline/2,
                        max_per_request = ?MAX_TL_REQ,
                        results_parser = fun(Qty, Y) ->
-                                                { Qty > length(Y),
+                                                { Qty >= length(Y),
                                                   Y
                                                 }
                                         end,
@@ -241,14 +241,31 @@ process_latest(Latest, Accum, State) ->
 
 %%%%%% Test suite, should make eunit-compatible
 run_tests() ->
-    test_timeline(),
+    test_timelines(),
     test_search().
+
+test_timelines() ->
+    test_timeline(),
+    test_timeline2(),
+    test_timeline3().
 
 test_timeline() ->
     ResultSet = timeline(user, {count, ?MAX_TL_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
     MaxId = proplists:get_value(max_id, ResultSet),
     MinId = proplists:get_value(min_id, ResultSet),
     {MaxId, MinId, ?MAX_TL_REQ * 2 + 3} = process_test_list(proplists:get_value(tweets, ResultSet)).
+
+test_timeline2() ->
+    ResultSet = timeline(user, {count, ?MAX_TL_REQ}, fun(X) -> proplists:get_value(id, X) end),
+    MaxId = proplists:get_value(max_id, ResultSet),
+    MinId = proplists:get_value(min_id, ResultSet),
+    {MaxId, MinId, ?MAX_TL_REQ} = process_test_list(proplists:get_value(tweets, ResultSet)).
+
+test_timeline3() ->
+    ResultSet = timeline(user, {count, ?MAX_TL_REQ-3}, fun(X) -> proplists:get_value(id, X) end),
+    MaxId = proplists:get_value(max_id, ResultSet),
+    MinId = proplists:get_value(min_id, ResultSet),
+    {MaxId, MinId, ?MAX_TL_REQ-3} = process_test_list(proplists:get_value(tweets, ResultSet)).
 
 test_search() ->
     ResultSet = search("java", {count, ?MAX_SEARCH_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
