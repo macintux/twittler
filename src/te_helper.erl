@@ -59,6 +59,9 @@ follow(List) ->
 %% @doc Helper function to check for the presence of next_results in
 %% the search_metadata (or next_cursor in friends/followers) in the
 %% return value from the latest set of results
+%%
+%% Note: next_results often doesn't appear in search results, so not
+%% using this for searching.
 -spec check_for_cursor(term()) -> boolean().
 check_for_cursor(undefined) ->
     false;
@@ -93,10 +96,11 @@ search(Query, {count, X}, Fun) ->
                 #state{'query' = Query,
                        api_call = fun twittler:search/2,
                        max_per_request = ?MAX_SEARCH_REQ,
-                       results_parser = fun(_Qty, Y) ->
-                                                { check_for_cursor(proplists:get_value(next_results,
-                                                                                       proplists:get_value(search_metadata, Y))),
-                                                  proplists:get_value(statuses, Y)
+                       results_parser = fun(Qty, Y) ->
+                                                Tweets =
+                                                    proplists:get_value(statuses, Y),
+                                                { Qty >= length(Tweets) andalso length(Tweets) > 0,
+                                                  Tweets
                                                 }
                                         end,
                        per_msg_fun = Fun}),
@@ -111,7 +115,7 @@ timeline(user, {screen_name, Who}, {count, X}, Fun) ->
                        max_per_request = ?MAX_TL_REQ,
                        api_call = fun twittler:timeline/2,
                        results_parser = fun(Qty, Y) ->
-                                                { Qty > length(Y),
+                                                { Qty >= length(Y) andalso length(Y) > 0,
                                                   Y
                                                 }
                                         end,
@@ -125,7 +129,7 @@ timeline(Which, {count, X}, Fun) ->
                        api_call = fun twittler:timeline/2,
                        max_per_request = ?MAX_TL_REQ,
                        results_parser = fun(Qty, Y) ->
-                                                { Qty >= length(Y),
+                                                { Qty >= length(Y) andalso length(Y) > 0,
                                                   Y
                                                 }
                                         end,
@@ -168,6 +172,13 @@ extract_retweet(_Tweet, Retweet) ->
 is_retweet(Tweet) ->
     proplists:get_value(retweeted_status, Tweet) =/= undefined.
 
+
+%% Find the first ID in a list of tweets
+find_first_id([]) ->
+    0;
+find_first_id(Tweets) ->
+    find_id(lists:nth(1, Tweets)).
+
 %% Consolidate timeline, search
 %% unified() returns { State, List }
 
@@ -179,7 +190,7 @@ unified(HowMany, State) ->
 unified(true, Remaining, [], [], State) ->
     {Continue, Tweets} =
         do_call(min(State#state.max_per_request, Remaining), State),
-    FirstId = find_id(lists:nth(1, Tweets)),
+    FirstId = find_first_id(Tweets),
     unified(Continue, Remaining - length(Tweets), Tweets, [],
             State#state{max_id=FirstId});
 
@@ -209,14 +220,20 @@ do_call(NextQty, State) ->
 %% If we don't have a minimum ID yet, that means we start at the first
 %% tweet Twitter will give us.
 do_call(Qty, State, 0) ->
-    apply(State#state.results_parser,
-          [ Qty,
-            apply(State#state.api_call,
-                  [State#state.'query',
-                   State#state.args ++
-                       [{count, Qty}]])
-          ]
-         );
+    Results = apply(State#state.api_call,
+                    [State#state.'query',
+                     State#state.args ++ [{count, Qty}]]),
+    %% Watch for invalid user accounts in timeline requests
+    case Results of
+        {wrong_url, _Errmsg} ->
+            { false, [] };
+        _ ->
+            apply(State#state.results_parser,
+                  [ Qty,
+                    Results
+                  ]
+                 )
+    end;
 %% If we do have a minimum ID from previous timeline/search
 %% navigation, use that (minus 1) as the maximum ID we want Twitter to
 %% give us the second time around
@@ -232,7 +249,12 @@ do_call(Qty, State, MinId) ->
           ).
 
 %% Utility function to take the latest results, merge them with the
-%% existing results, and update state appropriately
+%% existing results, and update state appropriately.
+%%
+%% When we hit the end of search results or a timeline, the first
+%% argument will be an empty list.
+process_latest([], Accum, State) ->
+    { State, Accum };
 process_latest(Latest, Accum, State) ->
     OldestId = find_id(lists:last(Latest)),
     { State#state{min_id=OldestId},
@@ -268,10 +290,27 @@ test_timeline3() ->
     {MaxId, MinId, ?MAX_TL_REQ-3} = process_test_list(proplists:get_value(tweets, ResultSet)).
 
 test_search() ->
+    test_search_more(),
+    test_search_toofew(),
+    test_search_none().
+
+test_search_more() ->
     ResultSet = search("java", {count, ?MAX_SEARCH_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
     MaxId = proplists:get_value(max_id, ResultSet),
     MinId = proplists:get_value(min_id, ResultSet),
     {MaxId, MinId, ?MAX_SEARCH_REQ * 2 + 3} = process_test_list(proplists:get_value(tweets, ResultSet)).
+
+test_search_none() ->
+    ResultSet = search("aecfioué#!", {count, ?MAX_SEARCH_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
+    0 = proplists:get_value(max_id, ResultSet),
+    0 = proplists:get_value(min_id, ResultSet),
+    [] = proplists:get_value(tweets, ResultSet).
+
+test_search_toofew() ->
+    ResultSet = search("gist.github.com/macintux", {count, ?MAX_SEARCH_REQ * 2 + 3}, fun(X) -> proplists:get_value(id, X) end),
+    MaxId = proplists:get_value(max_id, ResultSet),
+    MinId = proplists:get_value(min_id, ResultSet),
+    {MaxId, MinId, _Count} = process_test_list(proplists:get_value(tweets, ResultSet)).
 
 process_test_list(List) ->
     ok = check_decrement(List),
